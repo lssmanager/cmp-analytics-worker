@@ -1,4 +1,4 @@
-name               = "cloudflare-cmp-pro"
+name               = "cmp-analytics-worker"
 main               = "worker.js"
 compatibility_date = "2024-01-01"
 account_id         = "98c96ab36a10a07368fa73f890aa8efd"
