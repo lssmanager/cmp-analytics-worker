@@ -10,3 +10,18 @@ id      = "26ab20d559c249798b2764c2642c25f6"
 [[kv_namespaces]]
 binding = "CONSENT_KV"
 id      = "76af2f817a7749cf83b9e3993f7340cb"
+
+[observability]
+enabled            = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled            = true
+head_sampling_rate = 1
+persist            = true
+invocation_logs    = true
+
+[observability.traces]
+enabled            = false
+persist            = true
+head_sampling_rate = 1
