@@ -3,16 +3,21 @@ import { MOODLE_COOKIES, WC_COOKIES, WP_COOKIES } from "../config/regions.js"
 export function detectPlatforms(request) {
   const url     = new URL(request.url)
   const cookies = request.headers.get("cookie") || ""
-  const has     = (names) => names.some(n => cookies.includes(n))
+
+  const moodle = Array.isArray(MOODLE_COOKIES) ? MOODLE_COOKIES : []
+  const wc     = Array.isArray(WC_COOKIES)     ? WC_COOKIES     : []
+  const wp     = Array.isArray(WP_COOKIES)     ? WP_COOKIES     : []
+
+  const has = (names) => names.some(n => cookies.includes(n))
 
   return {
-    isMoodle       : url.hostname === "lms.learnsocialstudies.com" || has(MOODLE_COOKIES),
-    isWooCommerce  : has(WC_COOKIES),
-    isWordPress    : has(WP_COOKIES),
-    isLoggedInWP   : cookies.includes("wordpress_logged_in"),
+    isMoodle        : url.hostname.includes("lms.") || has(moodle),
+    isWooCommerce   : has(wc),
+    isWordPress     : has(wp),
+    isLoggedInWP    : cookies.includes("wordpress_logged_in"),
     isLoggedInMoodle: cookies.includes("MoodleSession"),
-    hasCartItems   : cookies.includes("woocommerce_items_in_cart") &&
-                     !cookies.includes("woocommerce_items_in_cart=0"),
-    host           : url.hostname
+    hasCartItems    : cookies.includes("woocommerce_items_in_cart") &&
+                      !cookies.includes("woocommerce_items_in_cart=0"),
+    host            : url.hostname
   }
 }
