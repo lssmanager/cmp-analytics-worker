@@ -1,0 +1,12 @@
+name               = "cloudflare-cmp-pro"
+main               = "worker.js"
+compatibility_date = "2024-01-01"
+account_id         = "98c96ab36a10a07368fa73f890aa8efd"
+
+[[kv_namespaces]]
+binding = "ANALYTICS"
+id      = "26ab20d559c249798b2764c2642c25f6"
+
+[[kv_namespaces]]
+binding = "CONSENT_KV"
+id      = "76af2f817a7749cf83b9e3993f7340cb"
