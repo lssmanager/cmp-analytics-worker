@@ -7,17 +7,66 @@ import { injectBanner }                             from "./modules/banner.js"
 import { blockScripts, restoreScriptsRuntime }      from "./modules/scriptBlocker.js"
 import { trackPageview, trackEventFromRequest }     from "./modules/analytics.js"
 import { applyHeaders, corsHeaders, jsonResponse }  from "./modules/headers.js"
-import { buildGCMScript }                           from "./modules/gcm.js"
+import { buildGCMScript, generateNonce }                           from "./modules/gcm.js"
 import { detectPlatforms }                          from "./modules/platformDetect.js"
 import { readSessionId, buildSessionCookie,
          buildUserIdentity }                        from "./modules/identity.js"
 import { buildTimeTrackerScript }                   from "./modules/timeTracker.js"
 import { buildUTMScript }                           from "./modules/utmPreserver.js"
+import { buildZarazScript }   from "./modules/zarazReporter.js"
 import { randomId, ONE_YEAR }                       from "./modules/utils.js"
 
 export default {
   async fetch(request, env, ctx) {
     const url       = new URL(request.url)
+    /* ── Bypass WebSocket ── */
+    if ((request.headers.get('upgrade') || '').toLowerCase() === 'websocket') {
+      return fetch(request)
+    }
+
+    /* ── Bypass subdominios: solo procesar www ── */
+    const _host = url.hostname
+    if (_host !== 'www.learnsocialstudies.com' && _host !== 'learnsocialstudies.com') {
+      return fetch(request)
+    }
+
+
+
+  /* ── Bypass total: rutas que NUNCA deben procesarse ── */
+  const BYPASS_PATHS = [
+    "/wp-admin/",
+    "/wp-login.php",
+    "/wp-cron.php",
+    "/wp-json/",
+    "/wp-includes/",
+    "/wp-content/plugins/",
+    "/wp-content/themes/",
+    "/wp-content/uploads/",
+    "/xmlrpc.php",
+    "/favicon.ico",
+    "/.well-known/",
+    "/robots.txt",
+    "/sitemap",
+  ]
+  const BYPASS_EXT = [
+    ".js",".css",".woff",".woff2",".ttf",".eot",
+    ".png",".jpg",".jpeg",".gif",".svg",".ico",
+    ".webp",".mp4",".webm",".pdf",".zip",
+  ]
+  const isAdminCookie = (request.headers.get("cookie") || "").includes("wordpress_logged_in_")
+  const _pathname = url.pathname
+  const _ext      = _pathname.includes(".") ? _pathname.slice(_pathname.lastIndexOf(".")).toLowerCase() : ""
+  // Rutas propias del worker — NUNCA hacer bypass aunque sea admin
+  const WORKER_PATHS = ["/cmp/", "/api/analytics"]
+  const isWorkerPath = WORKER_PATHS.some(p => _pathname.startsWith(p))
+
+  const _bypass = !isWorkerPath && (
+    BYPASS_PATHS.some(p => _pathname.startsWith(p)) ||
+    BYPASS_EXT.includes(_ext) ||
+    isAdminCookie
+  )
+  if (_bypass) return fetch(request)
+  /* ── Fin bypass ── */
     const geo_cf    = request.cf || {}
     const region    = detectRegion(geo_cf)
     const geo       = getGeoContext(geo_cf)
@@ -99,7 +148,8 @@ export default {
     if (ct.includes("text/html")) {
 
       // 1. GCM v2 update en <head> (solo si hay consent previo)
-      const gcmScript = buildGCMScript(rawConsent)
+      const nonce = generateNonce()
+      const gcmScript = buildGCMScript(rawConsent, region, nonce)
       if (gcmScript) {
         response = await new HTMLRewriter()
           .on("head", { element(el) { el.append(gcmScript, { html: true }) } })
@@ -117,7 +167,12 @@ export default {
 
       // 4. Banner CMP
       response = await injectBanner(response, {
-        region, consent, endpoint: "/cmp/consent", legalHubPath: "/legal-hub"
+        region,
+        consent    : rawConsent,   // rawConsent = null si no hay cookie
+        mergedConsent: consent,    // consent mergeado para toggles del panel
+        request,
+        endpoint   : "/cmp/consent",
+        legalHubPath: "/legal-hub"
       })
 
       // 5. Restaurar scripts tras consentimiento
@@ -128,6 +183,13 @@ export default {
       response = await new HTMLRewriter()
         .on("body", { element(el) { el.append(timeScript, { html: true }) } })
         .transform(response)
+
+      // 7. Zaraz reporter (track + ecommerce)
+      const zarazScript = buildZarazScript({ consent, geo, sessionId, region })
+      response = await new HTMLRewriter()
+        .on("body", { element(el) { el.append(zarazScript, { html: true }) } })
+        .transform(response)
+
     }
 
     /* ── Analytics edge ── */
@@ -149,3 +211,4 @@ export default {
     })
   }
 }
+// AGREGAR esta función antes del fetch handler

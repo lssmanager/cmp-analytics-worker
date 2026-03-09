@@ -4,10 +4,10 @@ export function readConsent(request) {
   const cookies = parseCookieHeader(request.headers.get("cookie") || "")
   const raw = cookies.consent
   if (!raw) return null
-  const obj = {}
+  const obj = { _source: "cookie" }
   raw.split(",").forEach(pair => {
     const [k, v] = pair.split(":")
-    if (k) obj[k] = v === "true"
+    if (k && k !== "_source") obj[k] = v === "true"
   })
   return obj
 }

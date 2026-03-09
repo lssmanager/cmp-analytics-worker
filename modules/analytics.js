@@ -39,10 +39,15 @@ export async function trackPageview(request, env, region, consent, geo, platform
     timestamp: Date.now()
   }
 
-  if (env.ANALYTICS) {
-    await env.ANALYTICS.put(event.id, JSON.stringify(event), {
-      expirationTtl: 60 * 60 * 24 * 365
-    })
+  const SKIP_KV = ["time_on_page","heartbeat","scroll_depth","ping","time_update"]
+  if (env.ANALYTICS && !SKIP_KV.includes(event.type)) {
+    try {
+      await env.ANALYTICS.put(event.id, JSON.stringify(event), {
+        expirationTtl: 60 * 60 * 24 * 365
+      })
+    } catch (kvErr) {
+      console.warn("[analytics] KV skip:", kvErr.message)
+    }
   }
 }
 
@@ -72,10 +77,15 @@ export async function trackEventFromRequest(request, env, region, consent, geo, 
     timestamp  : Date.now()
   }
 
-  if (env.ANALYTICS) {
-    await env.ANALYTICS.put(event.id, JSON.stringify(event), {
-      expirationTtl: 60 * 60 * 24 * 365
-    })
+  const skipKV = ["time_on_page","heartbeat","scroll_depth","ping","time_update"].includes(event.type)
+  if (env.ANALYTICS && !skipKV) {
+    try {
+      await env.ANALYTICS.put(event.id, JSON.stringify(event), {
+        expirationTtl: 60 * 60 * 24 * 365
+      })
+    } catch (kvErr) {
+      console.warn("[analytics] KV skip:", kvErr.message)
+    }
   }
   return { ok: true, id: event.id }
 }

@@ -1,41 +1,38 @@
-export function buildGCMScript(consent) {
-  // Con googleConsentV2Default:true, Zaraz ya niega todo por defecto.
-  // Solo necesitamos el UPDATE si ya hay cookie de consentimiento.
-  if (!consent) return ""
+export function generateNonce() {
+  const arr = new Uint8Array(16)
+  crypto.getRandomValues(arr)
+  return btoa(String.fromCharCode(...arr))
+}
 
-  const update = {
-    ad_storage         : consent.marketing  ? "granted" : "denied",
-    ad_user_data       : consent.marketing  ? "granted" : "denied",
-    ad_personalization : consent.marketing  ? "granted" : "denied",
-    analytics_storage  : consent.analytics  ? "granted" : "denied"
-  }
+export function buildGCMScript(rawConsent, region, nonce) {
+  const isEU = region === "eu"
+  const isCA = region === "ca"
+  const needsBanner = isEU || isCA
 
-  return `
-<script>
-(function() {
-  var U = ${JSON.stringify(update)};
+  const defaultAnalytics = needsBanner ? "denied" : "granted"
+  const defaultAds       = needsBanner ? "denied" : "granted"
 
-  function applyUpdate() {
-    if (window.zaraz) {
-      zaraz.set("google_consent_update", U);
-    } else {
-      setTimeout(applyUpdate, 100);
-    }
-  }
+  const analyticsStorage = rawConsent?.analytics ? "granted" : "denied"
+  const adStorage        = rawConsent?.marketing  ? "granted" : "denied"
+  const adUserData       = rawConsent?.marketing  ? "granted" : "denied"
+  const adPersonal       = rawConsent?.marketing  ? "granted" : "denied"
 
-  /* Listener para actualización en tiempo real desde el banner */
-  window.addEventListener("cmp:consent_updated", function(ev) {
-    if (!ev.detail || !window.zaraz) return;
-    var c = ev.detail;
-    zaraz.set("google_consent_update", {
-      ad_storage         : c.marketing  ? "granted" : "denied",
-      ad_user_data       : c.marketing  ? "granted" : "denied",
-      ad_personalization : c.marketing  ? "granted" : "denied",
-      analytics_storage  : c.analytics  ? "granted" : "denied"
-    });
-  });
+  const nonceAttr = nonce ? ` nonce="${nonce}"` : ""
 
-  applyUpdate();
-})();
+  return `<script${nonceAttr}>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('consent', 'default', {
+  'analytics_storage':  '${defaultAnalytics}',
+  'ad_storage':         '${defaultAds}',
+  'ad_user_data':       '${defaultAds}',
+  'ad_personalization': '${defaultAds}',
+  'wait_for_update': 500
+});
+${isEU ? `gtag('consent','default',{'analytics_storage':'denied','ad_storage':'denied','ad_user_data':'denied','ad_personalization':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE','IS','LI','NO','GB']});` : ""}
+${isCA ? `gtag('consent','default',{'analytics_storage':'denied','ad_storage':'denied','ad_user_data':'denied','ad_personalization':'denied','region':['CA']});` : ""}
+${rawConsent ? `gtag('consent','update',{'analytics_storage':'${analyticsStorage}','ad_storage':'${adStorage}','ad_user_data':'${adUserData}','ad_personalization':'${adPersonal}'});` : ""}
+gtag('set','url_passthrough',true);
+${!rawConsent?.marketing ? "gtag('set','ads_data_redaction',true);" : ""}
 </script>`
 }
