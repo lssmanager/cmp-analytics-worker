@@ -20,20 +20,29 @@ import { buildUTMScript } from "./modules/utmPreserver.js"
 import { buildZarazScript } from "./modules/zarazReporter.js"
 import { randomId, ONE_YEAR } from "./modules/utils.js"
 
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
+    const pathname = url.pathname.toLowerCase()
 
+    // 1) Bypass WebSocket
     if ((request.headers.get("upgrade") || "").toLowerCase() === "websocket") {
       return fetch(request)
     }
 
+    // 2) Bypass por host: solo estos dominios
     const host = url.hostname
-    if (host !== "www.learnsocialstudies.com" && host !== "learnsocialstudies.com") {
+    if (
+      host !== "www.learnsocialstudies.com" &&
+      host !== "learnsocialstudies.com" &&
+      host !== "lms.learnsocialstudies.com"
+    ) {
       return fetch(request)
     }
 
-    const BYPASS_PATHS = [
+    // 3) Bypass por paths internos de WP muy frecuentes
+    const BYPASS_PATH_PREFIXES = [
       "/wp-admin/",
       "/wp-login.php",
       "/wp-cron.php",
@@ -42,40 +51,91 @@ export default {
       "/wp-content/plugins/",
       "/wp-content/themes/",
       "/wp-content/uploads/",
+      "/wp-content/cache/",
+      "/wc-api/",
+      "/?wc-ajax=",
       "/xmlrpc.php",
       "/favicon.ico",
       "/.well-known/",
       "/robots.txt",
       "/sitemap",
+      "/cdn-cgi/",
     ]
 
-    const BYPASS_EXT = [
-      ".js", ".css", ".woff", ".woff2", ".ttf", ".eot",
-      ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
-      ".webp", ".mp4", ".webm", ".pdf", ".zip",
-      ".xml", ".txt", ".map",
-    ]
+    for (const prefix of BYPASS_PATH_PREFIXES) {
+      if (pathname.startsWith(prefix)) {
+        return fetch(request)
+      }
+    }
 
-    const pathname = url.pathname
-    const ext = pathname.includes(".")
-      ? pathname.slice(pathname.lastIndexOf(".")).toLowerCase()
-      : ""
+    // 4) Bypass por extensión (assets)
+    const dotIndex = pathname.lastIndexOf(".")
+    let ext = ""
+    if (dotIndex !== -1) {
+      ext = pathname.slice(dotIndex).toLowerCase()
+      const BYPASS_EXT = new Set([
+        ".js", ".mjs", ".css",
+        ".woff", ".woff2", ".ttf", ".eot",
+        ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".avif",
+        ".mp4", ".webm", ".mp3",
+        ".pdf", ".zip", ".rar", ".7z",
+        ".xml", ".txt", ".map",
+      ])
+      if (BYPASS_EXT.has(ext)) {
+        return fetch(request)
+      }
+    }
 
-    const isAdminCookie = (request.headers.get("cookie") || "").includes("wordpress_logged_in_")
+    // 5) Bypass por cookie de admin (panel WP)
+    const cookies = request.headers.get("cookie") || ""
+    const isAdminCookie = cookies.includes("wordpress_logged_in_")
 
+    // 6) Paths del propio Worker que sí deben pasar
     const WORKER_PATHS = ["/cmp/", "/api/analytics"]
     const isWorkerPath = WORKER_PATHS.some((p) => pathname.startsWith(p))
 
+    // 7) Bypass por User-Agent y Accept (bots, preloads, no-HTML)
+    const ua = (request.headers.get("user-agent") || "").toLowerCase()
+    const accept = (request.headers.get("accept") || "").toLowerCase()
+    const isFlyingPressPreload = request.headers.has("x-flying-press-preload")
+
+    const BOT_KEYWORDS = [
+      "googlebot",
+      "bingbot",
+      "duckduckbot",
+      "baiduspider",
+      "yandex",
+      "uptimerobot",
+      "crawler",
+      "spider",
+      "headless",
+      "python-requests",
+    ]
+    const isBotUA = BOT_KEYWORDS.some((b) => ua.includes(b))
+    const isNonHtmlAccept = accept && !accept.includes("text/html")
+
     const shouldBypass =
       !isWorkerPath &&
-      (BYPASS_PATHS.some((p) => pathname.startsWith(p)) ||
-        BYPASS_EXT.includes(ext) ||
-        isAdminCookie)
+      (
+        BYPASS_PATH_PREFIXES.some((p) => pathname.startsWith(p)) ||
+        (ext && [
+          ".js", ".mjs", ".css",
+          ".woff", ".woff2", ".ttf", ".eot",
+          ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".avif",
+          ".mp4", ".webm", ".mp3",
+          ".pdf", ".zip", ".rar", ".7z",
+          ".xml", ".txt", ".map",
+        ].includes(ext)) ||
+        isAdminCookie ||
+        isBotUA ||
+        isFlyingPressPreload ||
+        isNonHtmlAccept
+      )
 
     if (shouldBypass) {
       return fetch(request)
     }
-
+   
     const geo_cf = request.cf || {}
     const region = detectRegion(geo_cf)
     const geo = getGeoContext(geo_cf)
