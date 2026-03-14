@@ -13,6 +13,10 @@ kv_namespaces = [
   { binding = "ANALYTICS", id = "26ab20d559c249798b2764c2642c25f6" },
 ]
 
+analytics_engine_datasets = [
+  { binding = "AE", dataset = "cmp_analytics" },
+]
+
 [observability]
 [observability.logs]
 enabled = true
