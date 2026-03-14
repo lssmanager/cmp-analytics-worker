@@ -3,18 +3,18 @@ main = "worker.js"
 compatibility_date = "2024-11-01"
 workers_dev = true
 
+routes = [
+  { pattern = "www.learnsocialstudies.com/*", zone_name = "learnsocialstudies.com" },
+  { pattern = "lms.learnsocialstudies.com/*", zone_name = "learnsocialstudies.com" },
+]
+
+kv_namespaces = [
+  { binding = "CONSENT_KV", id = "76af2f817a7749cf83b9e3993f7340cb" },
+  { binding = "ANALYTICS", id = "26ab20d559c249798b2764c2642c25f6" },
+]
+
 [observability]
 [observability.logs]
 enabled = true
 invocation_logs = true
 head_sampling_rate = 0.1
-
-[env.production]
-routes = [
-  { pattern = "www.learnsocialstudies.com/*", zone_name = "learnsocialstudies.com" },
-  { pattern = "lms.learnsocialstudies.com/*", zone_name = "learnsocialstudies.com" },
-]
-kv_namespaces = [
-  { binding = "CONSENT_KV", id = "76af2f817a7749cf83b9e3993f7340cb" },
-  { binding = "ANALYTICS", id = "26ab20d559c249798b2764c2642c25f6" },
-]
