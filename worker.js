@@ -20,7 +20,6 @@ import { buildUTMScript } from "./modules/utmPreserver.js"
 import { buildZarazScript } from "./modules/zarazReporter.js"
 import { randomId, ONE_YEAR } from "./modules/utils.js"
 
-
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
@@ -135,7 +134,9 @@ export default {
     if (shouldBypass) {
       return fetch(request)
     }
-   
+
+    // --- A partir de aquí, tu lógica CMP/analytics original ---
+
     const geo_cf = request.cf || {}
     const region = detectRegion(geo_cf)
     const geo = getGeoContext(geo_cf)
