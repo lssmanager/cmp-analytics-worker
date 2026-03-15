@@ -4,7 +4,8 @@ compatibility_date = "2024-11-01"
 workers_dev = true
 
 routes = [
-  { pattern = "www.learnsocialstudies.com/*", zone_name = "learnsocialstudies.com" }
+  { pattern = "www.learnsocialstudies.com/", zone_name = "learnsocialstudies.com" },
+  { pattern = "www.learnsocialstudies.com/*/", zone_name = "learnsocialstudies.com" }
 ]
 
 kv_namespaces = [
@@ -19,5 +20,5 @@ analytics_engine_datasets = [
 [observability]
 [observability.logs]
 enabled = true
-invocation_logs = true
-head_sampling_rate = 0.1
+invocation_logs = false
+head_sampling_rate = 0.01
