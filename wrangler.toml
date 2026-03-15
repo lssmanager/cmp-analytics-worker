@@ -4,8 +4,7 @@ compatibility_date = "2024-11-01"
 workers_dev = true
 
 routes = [
-  { pattern = "www.learnsocialstudies.com/", zone_name = "learnsocialstudies.com" },
-  { pattern = "www.learnsocialstudies.com/*/", zone_name = "learnsocialstudies.com" }
+  { pattern = "www.learnsocialstudies.com/*", zone_name = "learnsocialstudies.com" }
 ]
 
 kv_namespaces = [
