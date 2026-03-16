@@ -18,8 +18,8 @@ import { buildErrorTrackerScript } from './modules/errorTracker.js'
 import { applyHeaders } from './modules/headers.js'
 import {
   readSessionId,
-  buildSessionCookie,
-  buildUserIdentity
+  buildSessionCookie
+  // buildUserIdentity - removed (was used for server-side tracking - now client-side)
 } from './modules/identity.js'
 import { detectPlatforms } from './modules/platformDetect.js'
 import { blockScripts } from './modules/scriptBlocker.js'
@@ -67,7 +67,8 @@ export default {
       const { randomId } = await import('./modules/utils.js')
       sessionId = randomId()
     }
-    const identity = buildUserIdentity(request, geo, platforms, region)
+    // NOTE: identity removed - was used for server-side tracking (now client-side)
+    // const identity = buildUserIdentity(request, geo, platforms, region)
 
     // POLICY REDIRECT
     const policyPath = routePolicies(url, region)
@@ -143,13 +144,6 @@ export default {
     // ════════════════════════════════════════════════════════════════════════════
     // ELIMINADO: trackPageview() - ahora es client-side via Zaraz
     // ELIMINADO: trackEventFromRequest() - ahora es client-side via navigator.sendBeacon()
-
-    // SCRIPTS - GA4 Complete Event Tracking Stack
-    const nonce           = generateNonce()
-    const gcmScript       = buildGCMScript(consent, region, nonce)
-    const zarazScript     = buildZarazScript({ consent, geo, sessionId, region })
-    const utmScript       = buildUTMScript(ANALYTICS_ENDPOINT)
-    const timeTrackScript = buildTimeTrackerScript(sessionId, ANALYTICS_ENDPOINT)
 
     // SCRIPTS - GA4 Complete Event Tracking Stack (ALL CLIENT-SIDE)
     const nonce           = generateNonce()
