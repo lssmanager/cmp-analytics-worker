@@ -97,9 +97,20 @@ const TRANSLATIONS = {
 
 const LOGO = "https://media.learnsocialstudies.com/wp-content/uploads/2026/03/08101052/Complianz-Logo-1.avif"
 
-function getLang(request) {
-  const header = request?.headers?.get("accept-language") || "en"
-  const lang   = header.split(",")[0].split("-")[0].toLowerCase()
+function getLang(region) {
+  // IMPORTANTE: Las traducciones se determinan por REGIÓN GEOGRÁFICA (IP),
+  // no por idioma del navegador
+  // region = "eu", "us", "ca", "global"
+
+  // Mapeo región → idioma de traducción
+  const regionToLang = {
+    eu: "es",           // EU → Spanish (Complianz es EU-centric)
+    us: "en",           // US → English
+    ca: "en",           // CA → English (Français podría ser secundario)
+    global: "en"        // Global → English
+  }
+
+  const lang = regionToLang[region] || "en"
   return TRANSLATIONS[lang] ? lang : "en"
 }
 
@@ -271,7 +282,7 @@ ${BASE_CSS}
       if(k !== "_source") parts.push(k+":"+payload[k])
     }
     var age = cookieAge > 0 ? ";max-age="+cookieAge : ""
-    document.cookie="consent="+parts.join(",")+";path=/"+age+";SameSite=Lax"
+    document.cookie="cmp_consent="+parts.join(",")+";path=/"+age+";SameSite=Lax"
   }
 
   async function cmpSend(payload, cookieAge, doReload){
@@ -337,26 +348,29 @@ ${BASE_CSS}
   })
 
   // ── AUTO-DISMISS (solo global/us/ca) ──────────────────
-  // EU: sin acción = solo ocultar, SIN guardar cookie
+  // EU: banner permanece visible bloqueando scripts hasta aceptación
+  // global/us/ca: auto-accept con scroll/dismiss (sesión)
   var gone=false
   function autoDismiss(){
     if(gone)return;gone=true
     if(IS_EU){
-      hide()  // EU: solo ocultar, no guarda cookie → banner vuelve próxima visita
+      // EU: NO hacer nada - banner permanece visible bloqueando scripts
+      // Usuario DEBE aceptar mínimo cookies funcionales o guardar preferencias
       return
     }
-    // global/us/ca: accept all con cookie de sesión
+    // global/us/ca: accept all con cookie de sesión (auto-accept implícito)
     cmpSend(
       {necessary:true,analytics:true,marketing:true,preferences:true},
-      0,      // sesión → vuelve próxima visita
+      0,      // sesión → no persiste, solo para esta sesión
       false
     )
   }
 
+  // Scroll/dismiss triggers auto-dismissal para global/us/ca
   window.addEventListener("scroll",   autoDismiss,{once:true,passive:true})
   window.addEventListener("touchend", autoDismiss,{once:true,passive:true})
 
-  // Countdown solo para global/us/ca
+  // Countdown (10s) solo para global/us/ca - luego auto-accept
   if(!IS_EU){
     var n=10,cd=g("cmp-countdown")
     var ti=setInterval(function(){
@@ -381,7 +395,7 @@ export async function injectBanner(response, {
   // Si YA hay cookie de consent, no mostramos banner
   if (hasCookie) return response
 
-  const lang = getLang(request)
+  const lang = getLang(region)
   const t    = TRANSLATIONS[lang] || TRANSLATIONS.en
   const html = buildBannerHTML({
     region,

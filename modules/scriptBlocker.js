@@ -25,7 +25,7 @@ export async function restoreScriptsRuntime(response) {
 <script>
 (function() {
   function restore(cat) {
-    var val = document.cookie.split("; ").find(function(v){ return v.startsWith("consent="); });
+    var val = document.cookie.split("; ").find(function(v){ return v.startsWith("cmp_consent="); });
     if (!val || !val.includes(cat+":true")) return;
     document.querySelectorAll('script[data-consent="'+cat+'"][data-src]').forEach(function(s) {
       if (s.dataset.restored === "1") return;

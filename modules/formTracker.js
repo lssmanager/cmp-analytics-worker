@@ -7,7 +7,7 @@ export function buildFormTrackerScript(endpoint) {
   var submitted = new Set();
 
   function hasAnalyticsConsent() {
-    var c = document.cookie.split("; ").find(function(v){ return v.indexOf("consent=") === 0; });
+    var c = document.cookie.split("; ").find(function(v){ return v.indexOf("cmp_consent=") === 0; });
     return !!(c && c.indexOf("analytics:true") !== -1);
   }
 

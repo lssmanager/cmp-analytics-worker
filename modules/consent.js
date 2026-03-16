@@ -2,8 +2,13 @@ import { parseCookieHeader, ONE_YEAR } from "./utils.js"
 
 export function readConsent(request) {
   const cookies = parseCookieHeader(request.headers.get("cookie") || "")
-  const raw = cookies.consent
+
+  // Solo busca NUESTRA cookie de consentimiento: "cmp_consent"
+  // No detecta cookies antiguas de Complianz, Cookiebot, etc.
+  // Esto permite que nuestro CMP se muestre incluso si hay cookies antiguas
+  const raw = cookies.cmp_consent
   if (!raw) return null
+
   const obj = { _source: "cookie" }
   raw.split(",").forEach(pair => {
     const [k, v] = pair.split(":")
@@ -48,7 +53,7 @@ export function buildConsentCookie(consent, opts = {}) {
   const value = Object.entries(consent)
     .map(([k, v]) => `${k}:${Boolean(v)}`).join(",")
   return [
-    `consent=${value}`,
+    `cmp_consent=${value}`,
     `Path=${path}`,
     `Max-Age=${maxAge}`,
     `SameSite=${sameSite}`,
