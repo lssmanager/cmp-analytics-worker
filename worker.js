@@ -212,7 +212,7 @@ export default {
       // 3. Bloquear scripts por categoría
       response = await blockScripts(response, consent)
 
-      // 4. Banner CMP
+      // 4. Banner CMP - Idioma por país (IP) primero, luego navegador
       response = await injectBanner(response, {
         region,
         country: cf.country,                                            // País por IP (PRIORIDAD 1)

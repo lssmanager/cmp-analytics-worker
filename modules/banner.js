@@ -414,8 +414,8 @@ export async function injectBanner(response, {
   mergedConsent,  // consent con defaults
   endpoint,
   legalHubPath,
-  country,        // País (cf.country)
-  acceptLanguage  // Accept-Language header (fallback)
+  country,        // País (cf.country) - PRIORIDAD 1
+  acceptLanguage  // Accept-Language header - PRIORIDAD 2
 }) {
   const hasCookie = consent !== null && consent !== undefined
 
