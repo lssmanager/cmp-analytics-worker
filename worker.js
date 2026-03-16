@@ -9,6 +9,10 @@ import { buildGCMScript, generateNonce } from './modules/gcm.js'
 import { buildZarazScript } from './modules/zarazReporter.js'
 import { buildUTMScript } from './modules/utmPreserver.js'
 import { buildTimeTrackerScript } from './modules/timeTracker.js'
+import { buildLearningTrackerScript } from './modules/learningTracker.js'
+import { buildFormTrackerScript } from './modules/formTracker.js'
+import { buildSearchTrackerScript } from './modules/searchTracker.js'
+import { buildVideoTrackerScript } from './modules/videoTracker.js'
 import { applyHeaders } from './modules/headers.js'
 import {
   readSessionId,
@@ -23,13 +27,15 @@ import {
   trackPageview,
   trackEventFromRequest
 } from './modules/analytics.js'
-import { injectBanner } from './modules/banner.js'
+
+// OJO: ya NO usamos injectBanner aquí
+// import { injectBanner } from './modules/banner.js'
+import { buildBannerHTML, TRANSLATIONS } from './modules/banner.js'
 
 const ANALYTICS_ENDPOINT = '/__cmp/analytics'
 
 export default {
   async fetch(request, env, ctx) {
-    // Fallback al origen si algo peta (evita 1101)
     ctx.passThroughOnException()
 
     const url = new URL(request.url)
@@ -51,7 +57,7 @@ export default {
     const rawIP     = request.headers.get('cf-connecting-ip')
     const visitorIP = anonymizeIP(rawIP, region) ?? rawIP
 
-    // CONSENT
+    // CONSENT (solo para lógica interna / Zaraz / analytics)
     const rawConsent = readConsent(request)
     const consent    = rawConsent ?? getDefaultConsent(region)
 
@@ -74,7 +80,7 @@ export default {
       )
     }
 
-    // CONSENT POST
+    // CONSENT POST (endpoint del banner)
     if (request.method === 'POST' && url.pathname === '/__cmp/consent') {
       const body   = await parseConsentBody(request)
       const merged = { necessary: true, ...body }
@@ -82,7 +88,7 @@ export default {
       return new Response('OK', {
         status: 200,
         headers: {
-          'Set-Cookie': cookie,
+          'Set-Cookie'  : cookie,
           'Content-Type': 'text/plain'
         }
       })
@@ -119,7 +125,7 @@ export default {
     headers.set('X-Content-Type-Options', 'nosniff')
     headers.set('Permissions-Policy',     'interest-cohort=()')
 
-    // COOKIE NUEVO USUARIO
+    // COOKIE NUEVO USUARIO (solo session id)
     if (isNewUser) {
       headers.append('Set-Cookie', buildSessionCookie(sessionId))
     }
@@ -148,12 +154,18 @@ export default {
       )
     }
 
-    // SCRIPTS
+    // SCRIPTS - GA4 Complete Event Tracking Stack
     const nonce           = generateNonce()
     const gcmScript       = buildGCMScript(consent, region, nonce)
     const zarazScript     = buildZarazScript({ consent, geo, sessionId, region })
     const utmScript       = buildUTMScript(ANALYTICS_ENDPOINT)
     const timeTrackScript = buildTimeTrackerScript(sessionId, ANALYTICS_ENDPOINT)
+
+    // NEW: Tracking modules (Phase 1)
+    const learningScript  = buildLearningTrackerScript()
+    const formScript      = buildFormTrackerScript(ANALYTICS_ENDPOINT)
+    const searchScript    = buildSearchTrackerScript(ANALYTICS_ENDPOINT)
+    const videoScript     = buildVideoTrackerScript(ANALYTICS_ENDPOINT)
 
     // Base Response para HTMLRewriter
     const baseResponse = new Response(response.body, {
@@ -161,7 +173,7 @@ export default {
       headers
     })
 
-    // HTMLRewriter: head + body
+    // HTMLRewriter: Inject all analytics scripts
     let rewritten = new HTMLRewriter()
       .on('head', {
         element(el) {
@@ -172,7 +184,13 @@ export default {
       })
       .on('body', {
         element(el) {
+          // Core tracking
           el.append(timeTrackScript, { html: true })
+          // New tracking modules (Phase 1)
+          el.append(learningScript,  { html: true })
+          el.append(formScript,      { html: true })
+          el.append(searchScript,    { html: true })
+          el.append(videoScript,     { html: true })
         }
       })
       .transform(baseResponse)
@@ -180,14 +198,25 @@ export default {
     // SCRIPT BLOCKER
     rewritten = blockScripts(rewritten, consent)
 
-    // BANNER SOLO SI NO HAY COOKIE (injectBanner ya hace su propio HTMLRewriter)
-    return injectBanner(rewritten, {
+    // BANNER: SIEMPRE en HTML, como la versión vieja
+    const langHeader = request.headers.get('accept-language') || 'en'
+    const langCode   = langHeader.split(',')[0].split('-')[0].toLowerCase()
+    const t          = TRANSLATIONS[langCode] || TRANSLATIONS.en
+
+    const bannerHtml = buildBannerHTML({
       region,
-      consent      : rawConsent,
-      mergedConsent: consent,
-      request,
+      consent,
       endpoint     : ANALYTICS_ENDPOINT,
-      legalHubPath : '/legal-hub/'
+      legalHubPath : '/legal-hub/',
+      t
     })
+
+    return new HTMLRewriter()
+      .on('body', {
+        element(el) {
+          el.append(bannerHtml, { html: true })
+        }
+      })
+      .transform(rewritten)
   }
 }

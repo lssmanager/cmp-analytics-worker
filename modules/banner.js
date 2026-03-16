@@ -364,19 +364,38 @@ ${BASE_CSS}
       if(n<=0){clearInterval(ti);autoDismiss()}
     },1000)
   }
-})()
+})();
 </script>`
 }
 
-export async function injectBanner(response, { region, consent, mergedConsent, request, endpoint, legalHubPath }) {
-  // consent = rawConsent (null si no hay cookie en el request)
-  if (consent !== null && consent !== undefined) return response
+export async function injectBanner(response, {
+  region,
+  consent,        // rawConsent (null si no hay cookie)
+  mergedConsent,  // consent con defaults
+  request,
+  endpoint,
+  legalHubPath
+}) {
+  const hasCookie = consent !== null && consent !== undefined
+
+  // Si YA hay cookie de consent, no mostramos banner
+  if (hasCookie) return response
 
   const lang = getLang(request)
   const t    = TRANSLATIONS[lang] || TRANSLATIONS.en
-  const html = buildBannerHTML({ region, consent: mergedConsent, endpoint, legalHubPath, t })
+  const html = buildBannerHTML({
+    region,
+    consent: mergedConsent,
+    endpoint,
+    legalHubPath,
+    t
+  })
 
   return new HTMLRewriter()
-    .on("body", { element(el) { el.append(html, { html: true }) } })
+    .on("body", {
+      element(el) {
+        el.append(html, { html: true })
+      }
+    })
     .transform(response)
-}
+} 
