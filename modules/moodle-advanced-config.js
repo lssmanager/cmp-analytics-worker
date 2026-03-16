@@ -439,3 +439,7 @@ export function buildMoodleAdvancedTrackerScript() {
 })();
 </script>\`
 }
+// FIN DEL SCRIPT INLINE
+})();
+</script>`;
+}
