@@ -15,7 +15,7 @@ import { routePolicies }                  from './modules/policyRouter.js'
 import { anonymizeIP }                    from './modules/utils.js'
 import { trackPageview,
          trackEventFromRequest }          from './modules/analytics.js'
-import { buildBannerHTML }                from './modules/banner.js'
+import { injectBanner }                   from './modules/banner.js'
 
 const ANALYTICS_ENDPOINT = '/__cmp/analytics'
 
@@ -38,7 +38,8 @@ export default {
     const visitorIP = anonymizeIP(rawIP, region) ?? rawIP
 
     /* ── CONSENT COOKIE ── */
-    const consent = readConsent(request) ?? getDefaultConsent(region)
+    const rawConsent = readConsent(request)
+    const consent    = rawConsent ?? getDefaultConsent(region)
 
     /* ── PLATFORM + IDENTITY ── */
     const platforms = detectPlatforms(request)
@@ -115,7 +116,6 @@ export default {
     const timeTrackScript = buildTimeTrackerScript(sessionId, ANALYTICS_ENDPOINT)
 
     /* ── BANNER (compatible con cualquier export de banner.js) ── */
-    const bannerHTML = buildBannerHTML({ region, consent, endpoint: ANALYTICS_ENDPOINT, legalHubPath: '/legal-hub/' })
 
     /* ── INYECTAR EN HTML ── */
     let rewritten = new HTMLRewriter()
@@ -135,7 +135,17 @@ export default {
       .transform(new Response(response.body, { status: response.status, headers }))
 
     /* ── SCRIPT BLOCKER ── */
-    return blockScripts(rewritten, consent)
+    rewritten = blockScripts(rewritten, consent)
+
+    /* ── BANNER (solo si no hay consent cookie) ── */
+    return injectBanner(rewritten, {
+      region,
+      consent     : rawConsent,
+      mergedConsent: consent,
+      request,
+      endpoint    : ANALYTICS_ENDPOINT,
+      legalHubPath: '/legal-hub/'
+    })
   }
 }
 
