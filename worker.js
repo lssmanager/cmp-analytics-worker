@@ -215,9 +215,10 @@ export default {
       // 4. Banner CMP
       response = await injectBanner(response, {
         region,
-        consent: rawConsent,        // rawConsent para detectar si ya hay cookie
-        mergedConsent: consent,     // consent con defaults para mostrar en modal
-        request,                    // request para obtener idioma con getLang()
+        country: cf.country,           // ISO country code para detectar idioma
+        consent: rawConsent,            // rawConsent para detectar si ya hay cookie
+        mergedConsent: consent,         // consent con defaults para mostrar en modal
+        request,                        // request para obtener idioma con getLang()
         endpoint: "/cmp/consent",
         legalHubPath: "/legal-hub"
       })

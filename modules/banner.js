@@ -97,17 +97,40 @@ const TRANSLATIONS = {
 
 const LOGO = "https://media.learnsocialstudies.com/wp-content/uploads/2026/03/08101052/Complianz-Logo-1.avif"
 
-function getLang(region) {
-  // IMPORTANTE: Las traducciones se determinan por REGIÓN GEOGRÁFICA (IP),
-  // no por idioma del navegador
-  // region = "eu", "us", "ca", "global"
+function getLang(region, country) {
+  // IMPORTANTE: Las traducciones se determinan por PAÍS, no por región general
+  // Primero: mapeo país específico → idioma
+  // Fallback: región → idioma
+  // Fallback final: inglés
 
-  // Mapeo región → idioma de traducción
+  // Mapeo país ISO → idioma de traducción
+  // Soporta: es, en, fr, de, pt, it
+  const countryToLang = {
+    // Spanish-speaking
+    "ES": "es", "MX": "es", "AR": "es", "CO": "es",
+    // French-speaking
+    "FR": "fr", "BE": "fr", "CH": "fr",
+    // German-speaking
+    "DE": "de", "AT": "de",
+    // Portuguese-speaking
+    "PT": "pt", "BR": "pt",
+    // Italian-speaking
+    "IT": "it",
+    // English-speaking
+    "US": "en", "CA": "en", "GB": "en",
+  }
+
+  // Primero: intenta mapeo por país específico
+  if (country && countryToLang[country]) {
+    return countryToLang[country]
+  }
+
+  // Fallback: mapeo por región
   const regionToLang = {
-    eu: "es",           // EU → Spanish (Complianz es EU-centric)
-    us: "en",           // US → English
-    ca: "en",           // CA → English (Français podría ser secundario)
-    global: "en"        // Global → English
+    eu: "en",           // EU: por defecto inglés (usuarios del sitio son EN/ES/FR/DE)
+    us: "en",
+    ca: "en",
+    global: "en"
   }
 
   const lang = regionToLang[region] || "en"
@@ -388,14 +411,15 @@ export async function injectBanner(response, {
   mergedConsent,  // consent con defaults
   request,
   endpoint,
-  legalHubPath
+  legalHubPath,
+  country         // ISO country code para detección de idioma
 }) {
   const hasCookie = consent !== null && consent !== undefined
 
   // Si YA hay cookie de consent, no mostramos banner
   if (hasCookie) return response
 
-  const lang = getLang(region)
+  const lang = getLang(region, country)
   const t    = TRANSLATIONS[lang] || TRANSLATIONS.en
   const html = buildBannerHTML({
     region,
