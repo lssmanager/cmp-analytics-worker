@@ -97,44 +97,53 @@ const TRANSLATIONS = {
 
 const LOGO = "https://media.learnsocialstudies.com/wp-content/uploads/2026/03/08101052/Complianz-Logo-1.avif"
 
-function getLang(region, country) {
-  // IMPORTANTE: Las traducciones se determinan por PAÍS, no por región general
-  // Primero: mapeo país específico → idioma
-  // Fallback: región → idioma
-  // Fallback final: inglés
+function getLang(region, country, acceptLanguage = "") {
+  // ESTRATEGIA: Detectar idioma en orden de prioridad
+  // 1. Mapeo país específico (para casos críticos: DE, FR, ES)
+  // 2. Accept-Language header (preferencia del navegador)
+  // 3. Fallback región (defecto por región)
+  // 4. Inglés (fallback final)
 
-  // Mapeo país ISO → idioma de traducción
-  // Soporta: es, en, fr, de, pt, it
+  // Mapeo MÍNIMO: Solo países con idiomas específicos soportados
+  // No mapear TODOS los países - dejar que Accept-Language haga el resto
   const countryToLang = {
-    // Spanish-speaking
-    "ES": "es", "MX": "es", "AR": "es", "CO": "es",
-    // French-speaking
-    "FR": "fr", "BE": "fr", "CH": "fr",
-    // German-speaking
-    "DE": "de", "AT": "de",
-    // Portuguese-speaking
-    "PT": "pt", "BR": "pt",
-    // Italian-speaking
-    "IT": "it",
-    // English-speaking
-    "US": "en", "CA": "en", "GB": "en",
+    // Critical: Países grandes europeos donde importa el idioma nativo
+    "DE": "de", "AT": "de", "CH": "de",  // German
+    "FR": "fr", "BE": "fr",              // French
+    "ES": "es",                          // Spanish
+    "IT": "it",                          // Italian
+    "PT": "pt", "BR": "pt",              // Portuguese
   }
 
-  // Primero: intenta mapeo por país específico
+  // PASO 1: Intenta mapeo por país específico (solo los críticos)
   if (country && countryToLang[country]) {
     return countryToLang[country]
   }
 
-  // Fallback: mapeo por región
+  // PASO 2: Intenta Accept-Language header del navegador
+  // Ej: "es-GT, es;q=0.9, en;q=0.8" → extrae "es"
+  if (acceptLanguage) {
+    const langs = acceptLanguage.split(",")
+    for (let langStr of langs) {
+      const lang = langStr.trim().split(";")[0].toLowerCase()
+      if (lang.startsWith("es")) return "es"      // es, es-MX, es-GT, etc.
+      if (lang.startsWith("fr")) return "fr"      // fr, fr-CA, etc.
+      if (lang.startsWith("de")) return "de"      // de, de-AT, etc.
+      if (lang.startsWith("it")) return "it"      // it, it-IT, etc.
+      if (lang.startsWith("pt")) return "pt"      // pt, pt-BR, etc.
+      if (lang.startsWith("en")) return "en"      // en, en-US, etc.
+    }
+  }
+
+  // PASO 3: Fallback por región
   const regionToLang = {
-    eu: "en",           // EU: por defecto inglés (usuarios del sitio son EN/ES/FR/DE)
+    eu: "en",      // EU: defecto inglés (usuarios variados)
     us: "en",
     ca: "en",
     global: "en"
   }
 
-  const lang = regionToLang[region] || "en"
-  return TRANSLATIONS[lang] ? lang : "en"
+  return regionToLang[region] || "en"
 }
 
 const BASE_CSS = `
@@ -412,14 +421,15 @@ export async function injectBanner(response, {
   request,
   endpoint,
   legalHubPath,
-  country         // ISO country code para detección de idioma
+  country,        // ISO country code
+  acceptLanguage  // Accept-Language header
 }) {
   const hasCookie = consent !== null && consent !== undefined
 
   // Si YA hay cookie de consent, no mostramos banner
   if (hasCookie) return response
 
-  const lang = getLang(region, country)
+  const lang = getLang(region, country, acceptLanguage)
   const t    = TRANSLATIONS[lang] || TRANSLATIONS.en
   const html = buildBannerHTML({
     region,
