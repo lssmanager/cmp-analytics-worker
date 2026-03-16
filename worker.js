@@ -10,6 +10,7 @@ import { buildZarazScript } from './modules/zarazReporter.js'
 import { buildUTMScript } from './modules/utmPreserver.js'
 import { buildTimeTrackerScript } from './modules/timeTracker.js'
 import { buildLearningTrackerScript } from './modules/learningTracker.js'
+import { buildMoodleAdvancedTrackerScript } from './modules/moodle-advanced-config.js'
 import { buildBuddyBossTrackerScript } from './modules/buddybossTracker.js'
 import { buildFormTrackerScript } from './modules/formTracker.js'
 import { buildSearchTrackerScript } from './modules/searchTracker.js'
@@ -29,6 +30,7 @@ import { anonymizeIP } from './modules/utils.js'
 // OJO: ya NO usamos injectBanner aquí
 // import { injectBanner } from './modules/banner.js'
 import { buildBannerHTML, TRANSLATIONS } from './modules/banner.js'
+import { trackEventFromRequest } from './modules/analytics.js'
 
 const ANALYTICS_ENDPOINT = '/__cmp/analytics'
 
@@ -153,12 +155,13 @@ export default {
     const timeTrackScript = buildTimeTrackerScript(sessionId, ANALYTICS_ENDPOINT)
 
     // Phase 1-2: LMS, Social, Form, Search, Video, Error Tracking
-    const learningScript   = buildLearningTrackerScript()
-    const buddybossScript  = buildBuddyBossTrackerScript()
-    const formScript       = buildFormTrackerScript(ANALYTICS_ENDPOINT)
-    const searchScript     = buildSearchTrackerScript(ANALYTICS_ENDPOINT)
-    const videoScript      = buildVideoTrackerScript(ANALYTICS_ENDPOINT)
-    const errorScript      = buildErrorTrackerScript(ANALYTICS_ENDPOINT)
+    const learningScript        = buildLearningTrackerScript()
+    const moodleAdvancedScript  = buildMoodleAdvancedTrackerScript()
+    const buddybossScript       = buildBuddyBossTrackerScript()
+    const formScript            = buildFormTrackerScript(ANALYTICS_ENDPOINT)
+    const searchScript          = buildSearchTrackerScript(ANALYTICS_ENDPOINT)
+    const videoScript           = buildVideoTrackerScript(ANALYTICS_ENDPOINT)
+    const errorScript           = buildErrorTrackerScript(ANALYTICS_ENDPOINT)
 
     // Base Response para HTMLRewriter
     const baseResponse = new Response(response.body, {
@@ -181,6 +184,7 @@ export default {
           el.append(timeTrackScript, { html: true })
           // LMS Tracking (Moodle)
           el.append(learningScript,  { html: true })
+          el.append(moodleAdvancedScript, { html: true })
           // Social Community (BuddyBoss + GamiPress)
           el.append(buddybossScript, { html: true })
           // Forms, Search, Video, Error tracking
