@@ -10,6 +10,7 @@ import { buildZarazScript } from './modules/zarazReporter.js'
 import { buildUTMScript } from './modules/utmPreserver.js'
 import { buildTimeTrackerScript } from './modules/timeTracker.js'
 import { buildLearningTrackerScript } from './modules/learningTracker.js'
+import { buildBuddyBossTrackerScript } from './modules/buddybossTracker.js'
 import { buildFormTrackerScript } from './modules/formTracker.js'
 import { buildSearchTrackerScript } from './modules/searchTracker.js'
 import { buildVideoTrackerScript } from './modules/videoTracker.js'
@@ -24,10 +25,6 @@ import { detectPlatforms } from './modules/platformDetect.js'
 import { blockScripts } from './modules/scriptBlocker.js'
 import { routePolicies } from './modules/policyRouter.js'
 import { anonymizeIP } from './modules/utils.js'
-import {
-  trackPageview,
-  trackEventFromRequest
-} from './modules/analytics.js'
 
 // OJO: ya NO usamos injectBanner aquí
 // import { injectBanner } from './modules/banner.js'
@@ -139,21 +136,13 @@ export default {
       })
     }
 
-    // ANALYTICS PAGEVIEW (async)
-    if (consent?.analytics) {
-      ctx.waitUntil(
-        trackPageview(
-          request,
-          env,
-          region,
-          consent,
-          geo,
-          platforms,
-          sessionId,
-          identity
-        )
-      )
-    }
+    // ════════════════════════════════════════════════════════════════════════════
+    // ANALYTICS: ALL CLIENT-SIDE (Zaraz + JS Trackers)
+    // El worker NO almacena ni procesa analytics - solo inyecta scripts
+    // Tracking ocurre 100% en el cliente via Zaraz → Google Analytics 4
+    // ════════════════════════════════════════════════════════════════════════════
+    // ELIMINADO: trackPageview() - ahora es client-side via Zaraz
+    // ELIMINADO: trackEventFromRequest() - ahora es client-side via navigator.sendBeacon()
 
     // SCRIPTS - GA4 Complete Event Tracking Stack
     const nonce           = generateNonce()
@@ -162,12 +151,20 @@ export default {
     const utmScript       = buildUTMScript(ANALYTICS_ENDPOINT)
     const timeTrackScript = buildTimeTrackerScript(sessionId, ANALYTICS_ENDPOINT)
 
-    // NEW: Tracking modules (Phase 1 + Phase 2)
-    const learningScript  = buildLearningTrackerScript()
-    const formScript      = buildFormTrackerScript(ANALYTICS_ENDPOINT)
-    const searchScript    = buildSearchTrackerScript(ANALYTICS_ENDPOINT)
-    const videoScript     = buildVideoTrackerScript(ANALYTICS_ENDPOINT)
-    const errorScript     = buildErrorTrackerScript(ANALYTICS_ENDPOINT)
+    // SCRIPTS - GA4 Complete Event Tracking Stack (ALL CLIENT-SIDE)
+    const nonce           = generateNonce()
+    const gcmScript       = buildGCMScript(consent, region, nonce)
+    const zarazScript     = buildZarazScript({ consent, geo, sessionId, region })
+    const utmScript       = buildUTMScript(ANALYTICS_ENDPOINT)
+    const timeTrackScript = buildTimeTrackerScript(sessionId, ANALYTICS_ENDPOINT)
+
+    // Phase 1-2: LMS, Social, Form, Search, Video, Error Tracking
+    const learningScript   = buildLearningTrackerScript()
+    const buddybossScript  = buildBuddyBossTrackerScript()
+    const formScript       = buildFormTrackerScript(ANALYTICS_ENDPOINT)
+    const searchScript     = buildSearchTrackerScript(ANALYTICS_ENDPOINT)
+    const videoScript      = buildVideoTrackerScript(ANALYTICS_ENDPOINT)
+    const errorScript      = buildErrorTrackerScript(ANALYTICS_ENDPOINT)
 
     // Base Response para HTMLRewriter
     const baseResponse = new Response(response.body, {
@@ -188,12 +185,14 @@ export default {
         element(el) {
           // Core tracking
           el.append(timeTrackScript, { html: true })
-          // Phase 1: E-learning, Forms, Search, Video tracking
+          // LMS Tracking (Moodle)
           el.append(learningScript,  { html: true })
+          // Social Community (BuddyBoss + GamiPress)
+          el.append(buddybossScript, { html: true })
+          // Forms, Search, Video, Error tracking
           el.append(formScript,      { html: true })
           el.append(searchScript,    { html: true })
           el.append(videoScript,     { html: true })
-          // Phase 2: Error & Performance monitoring
           el.append(errorScript,     { html: true })
         }
       })
