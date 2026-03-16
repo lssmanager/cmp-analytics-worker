@@ -232,33 +232,6 @@ export default {
         .transform(response)
     }
 
-    // ORIGIN
-    let response      = await fetch(request)
-    const contentType = response.headers.get('content-type') || ''
-
-    // SECURITY HEADERS
-    response = applyHeaders(response, region)
-    const headers = new Headers(response.headers)
-    headers.set('X-Privacy-Region',       region)
-    headers.set('X-Visitor-IP',           visitorIP || '')
-    headers.set('Referrer-Policy',        'strict-origin-when-cross-origin')
-    headers.set('X-Frame-Options',        'SAMEORIGIN')
-    headers.set('X-Content-Type-Options', 'nosniff')
-    headers.set('Permissions-Policy',     'interest-cohort=()')
-
-    // COOKIE NUEVO USUARIO (solo session id)
-    if (isNewUser) {
-      headers.append('Set-Cookie', buildSessionCookie(sessionId))
-    }
-
-    // NO HTML → devolver tal cual
-    if (!contentType.includes('text/html')) {
-      return new Response(response.body, {
-        status: response.status,
-        headers
-      })
-    }
-
     // ════════════════════════════════════════════════════════════════════════════
     // ANALYTICS: ALL CLIENT-SIDE (Zaraz + JS Trackers)
     // El worker NO almacena ni procesa analytics - solo inyecta scripts

@@ -11,6 +11,10 @@ routes = [
 binding = "CONSENT_KV"
 id      = "76af2f817a7749cf83b9e3993f7340cb"
 
+[[kv_namespaces]]
+binding = "ANALYTICS"
+id      = "26ab20d559c249798b2764c2642c25f6"
+
 [vars]
 GA4_MEASUREMENT_ID = ""
 GOOGLE_ADS_ID = ""
