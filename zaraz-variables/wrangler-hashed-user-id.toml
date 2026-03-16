@@ -1,3 +1,8 @@
 name = "zaraz-var-hashed-user-id"
 main = "./hashed-user-id.js"
 compatibility_date = "2024-01-01"
+
+[observability]
+[observability.logs]
+enabled = false
+invocation_logs = true
