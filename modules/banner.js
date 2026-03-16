@@ -111,11 +111,11 @@ function getLang(country, acceptLanguage = "") {
     "SV": "es", "HN": "es", "NI": "es", "CR": "es", "PA": "es", "CU": "es",
     "DO": "es", "PR": "es",
     // French-speaking countries
-    "FR": "fr", "CA": "fr", "BE": "fr", "CH": "fr", "LU": "fr",
+    "FR": "fr", "CA": "fr", "BE": "fr", "LU": "fr",
     // German-speaking countries
-    "DE": "de", "AT": "de", "CH": "de", "LI": "de",
+    "DE": "de", "AT": "de", "LI": "de",
     // Italian-speaking countries
-    "IT": "it", "CH": "it",
+    "IT": "it",
     // Portuguese-speaking countries
     "PT": "pt", "BR": "pt", "AO": "pt", "MZ": "pt",
     // English-speaking (default for many)
