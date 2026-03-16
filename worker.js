@@ -1,38 +1,51 @@
-import { detectRegion, getGeoContext }    from './modules/geo.js'
-import { readConsent, getDefaultConsent,
-         buildConsentCookie,
-         parseConsentBody }               from './modules/consent.js'
-import { buildGCMScript, generateNonce }  from './modules/gcm.js'
-import { buildZarazScript }               from './modules/zarazReporter.js'
-import { buildUTMScript }                 from './modules/utmPreserver.js'
-import { buildTimeTrackerScript }         from './modules/timeTracker.js'
-import { applyHeaders }                   from './modules/headers.js'
-import { readSessionId, buildSessionCookie,
-         buildUserIdentity }              from './modules/identity.js'
-import { detectPlatforms }                from './modules/platformDetect.js'
-import { blockScripts }                   from './modules/scriptBlocker.js'
-import { routePolicies }                  from './modules/policyRouter.js'
-import { anonymizeIP }                    from './modules/utils.js'
-import { trackPageview,
-         trackEventFromRequest }          from './modules/analytics.js'
-import { injectBanner }                   from './modules/banner.js'
+import { detectRegion, getGeoContext } from './modules/geo.js'
+import {
+  readConsent,
+  getDefaultConsent,
+  buildConsentCookie,
+  parseConsentBody
+} from './modules/consent.js'
+import { buildGCMScript, generateNonce } from './modules/gcm.js'
+import { buildZarazScript } from './modules/zarazReporter.js'
+import { buildUTMScript } from './modules/utmPreserver.js'
+import { buildTimeTrackerScript } from './modules/timeTracker.js'
+import { applyHeaders } from './modules/headers.js'
+import {
+  readSessionId,
+  buildSessionCookie,
+  buildUserIdentity
+} from './modules/identity.js'
+import { detectPlatforms } from './modules/platformDetect.js'
+import { blockScripts } from './modules/scriptBlocker.js'
+import { routePolicies } from './modules/policyRouter.js'
+import { anonymizeIP } from './modules/utils.js'
+import {
+  trackPageview,
+  trackEventFromRequest
+} from './modules/analytics.js'
+import { injectBanner } from './modules/banner.js'
 
 const ANALYTICS_ENDPOINT = '/__cmp/analytics'
 
 export default {
   async fetch(request, env, ctx) {
+    // Fallback al origen si algo peta (evita 1101)
+    ctx.passThroughOnException()
+
     const url = new URL(request.url)
 
     // BYPASS: assets, crawlers, wp-admin
     const cfWorker  = request.headers.get('cf-worker') || ''
     const isAsset   = /\.(js|css|woff2?|png|jpg|jpeg|gif|svg|ico|webp|map|txt|xml)(\?|$)/i.test(url.pathname)
     const isWpAdmin = url.pathname.startsWith('/wp-admin')
-    if (cfWorker || isAsset || isWpAdmin) return fetch(request)
+    if (cfWorker || isAsset || isWpAdmin) {
+      return fetch(request)
+    }
 
     // GEO + REGION
-    const cf      = request.cf ?? {}
-    const geo     = getGeoContext(cf)
-    const region  = detectRegion(cf)
+    const cf     = request.cf ?? {}
+    const geo    = getGeoContext(cf)
+    const region = detectRegion(cf)
 
     // IP
     const rawIP     = request.headers.get('cf-connecting-ip')
@@ -55,7 +68,10 @@ export default {
     // POLICY REDIRECT
     const policyPath = routePolicies(url, region)
     if (policyPath) {
-      return Response.redirect('https://www.learnsocialstudies.com' + policyPath, 302)
+      return Response.redirect(
+        'https://www.learnsocialstudies.com' + policyPath,
+        302
+      )
     }
 
     // CONSENT POST
@@ -65,14 +81,23 @@ export default {
       const cookie = buildConsentCookie(merged)
       return new Response('OK', {
         status: 200,
-        headers: { 'Set-Cookie': cookie, 'Content-Type': 'text/plain' }
+        headers: {
+          'Set-Cookie': cookie,
+          'Content-Type': 'text/plain'
+        }
       })
     }
 
     // ANALYTICS EVENT ENDPOINT
     if (request.method === 'POST' && url.pathname === ANALYTICS_ENDPOINT) {
       const result = await trackEventFromRequest(
-        request, env, region, consent, geo, platforms, sessionId
+        request,
+        env,
+        region,
+        consent,
+        geo,
+        platforms,
+        sessionId
       )
       return new Response(JSON.stringify(result), {
         status: 200,
@@ -95,17 +120,31 @@ export default {
     headers.set('Permissions-Policy',     'interest-cohort=()')
 
     // COOKIE NUEVO USUARIO
-    if (isNewUser) headers.append('Set-Cookie', buildSessionCookie(sessionId))
+    if (isNewUser) {
+      headers.append('Set-Cookie', buildSessionCookie(sessionId))
+    }
 
     // NO HTML → devolver tal cual
     if (!contentType.includes('text/html')) {
-      return new Response(response.body, { status: response.status, headers })
+      return new Response(response.body, {
+        status: response.status,
+        headers
+      })
     }
 
     // ANALYTICS PAGEVIEW (async)
     if (consent?.analytics) {
       ctx.waitUntil(
-        trackPageview(request, env, region, consent, geo, platforms, sessionId, identity)
+        trackPageview(
+          request,
+          env,
+          region,
+          consent,
+          geo,
+          platforms,
+          sessionId,
+          identity
+        )
       )
     }
 
@@ -122,7 +161,7 @@ export default {
       headers
     })
 
-    // HTMLRewriter: head + body (sin banner aquí)
+    // HTMLRewriter: head + body
     let rewritten = new HTMLRewriter()
       .on('head', {
         element(el) {
@@ -141,7 +180,7 @@ export default {
     // SCRIPT BLOCKER
     rewritten = blockScripts(rewritten, consent)
 
-    // BANNER SOLO SI NO HAY COOKIE
+    // BANNER SOLO SI NO HAY COOKIE (injectBanner ya hace su propio HTMLRewriter)
     return injectBanner(rewritten, {
       region,
       consent      : rawConsent,
