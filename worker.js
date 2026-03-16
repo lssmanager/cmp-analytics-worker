@@ -40,6 +40,9 @@ export default {
     // ════════════════════════════════════════════════════════════════════════════
 
     const pathname = url.pathname.toLowerCase()
+    const method = (request.method || "GET").toUpperCase()
+    const accept = (request.headers.get("accept") || "").toLowerCase()
+    const secFetchDest = (request.headers.get("sec-fetch-dest") || "").toLowerCase()
     const cfWorker = request.headers.get('cf-worker') || ''
 
     // Static file extensions
@@ -65,8 +68,14 @@ export default {
     // CGI scripts and server-side utilities
     const isCGI = /\.(php|cgi|asp|aspx)(\?|$)/i.test(pathname)
 
-    // Pass through if: internal cf-worker header OR static asset OR WP backend OR AJAX OR CGI
-    if (cfWorker || isStaticAsset || isWpBackend || isAjax || isCGI) {
+    // Only run full Worker logic for frontend HTML document navigations.
+    const isMethodAllowed = method === "GET" || method === "HEAD"
+    const isHtmlAccept = accept.includes("text/html")
+    const isDocumentDest = secFetchDest === "document"
+    const isFrontendDocument = isMethodAllowed && (isDocumentDest || isHtmlAccept)
+
+    // Fast bypass for backend/API/assets/non-document requests.
+    if (!isFrontendDocument || cfWorker || isStaticAsset || isWpBackend || isAjax || isBackendAPI || isCGI) {
       return fetch(request)
     }
 
