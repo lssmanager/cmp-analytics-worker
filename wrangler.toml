@@ -18,3 +18,14 @@ id      = "26ab20d559c249798b2764c2642c25f6"
 [vars]
 GA4_MEASUREMENT_ID = ""
 GOOGLE_ADS_ID = ""
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1

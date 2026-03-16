@@ -32,11 +32,41 @@ export default {
 
     const url = new URL(request.url)
 
-    // BYPASS: assets, crawlers, wp-admin
-    const cfWorker  = request.headers.get('cf-worker') || ''
-    const isAsset   = /\.(js|css|woff2?|png|jpg|jpeg|gif|svg|ico|webp|map|txt|xml)(\?|$)/i.test(url.pathname)
-    const isWpAdmin = url.pathname.startsWith('/wp-admin')
-    if (cfWorker || isAsset || isWpAdmin) {
+    // ════════════════════════════════════════════════════════════════════════════
+    // BYPASS: Backend & Static Assets (Reduce Worker Quota Usage)
+    // Pass through immediately: wp-admin, wp-includes, wp-content, wp-json,
+    // wp-cron.php, static files (css, js, images, fonts, etc), AJAX requests
+    // Only process actual frontend HTML pages to trackers
+    // ════════════════════════════════════════════════════════════════════════════
+
+    const pathname = url.pathname.toLowerCase()
+    const cfWorker = request.headers.get('cf-worker') || ''
+
+    // Static file extensions
+    const isStaticAsset = /\.(js|css|woff2?|ttf|otf|eot|gif|png|jpg|jpeg|webp|svg|ico|map|txt|xml|json|pdf|zip|gzip)(\?|$)/i.test(pathname)
+
+    // WordPress backend paths - pass through immediately
+    const isWpBackend = pathname.startsWith('/wp-admin') ||
+                        pathname.startsWith('/wp-includes') ||
+                        pathname.startsWith('/wp-content') ||
+                        pathname.startsWith('/wp-json') ||
+                        pathname === '/wp-cron.php' ||
+                        pathname.includes('/wp-cron.php')
+
+    // AJAX and API requests
+    const isAjax = pathname.includes('/wp-admin/admin-ajax.php') ||
+                   pathname.includes('/wp-json/')
+
+    // REST and other backend calls
+    const isBackendAPI = pathname.includes('/api/') ||
+                         pathname.includes('/rest/') ||
+                         pathname.includes('/ajax/')
+
+    // CGI scripts and server-side utilities
+    const isCGI = /\.(php|cgi|asp|aspx)(\?|$)/i.test(pathname)
+
+    // Pass through if: internal cf-worker header OR static asset OR WP backend OR AJAX OR CGI
+    if (cfWorker || isStaticAsset || isWpBackend || isAjax || isCGI) {
       return fetch(request)
     }
 
@@ -232,85 +262,6 @@ export default {
         .transform(response)
     }
 
-    // ════════════════════════════════════════════════════════════════════════════
-    // ANALYTICS: ALL CLIENT-SIDE (Zaraz + JS Trackers)
-    // El worker NO almacena ni procesa analytics - solo inyecta scripts
-    // Tracking ocurre 100% en el cliente via Zaraz → Google Analytics 4
-    // ════════════════════════════════════════════════════════════════════════════
-    // ELIMINADO: trackPageview() - ahora es client-side via Zaraz
-    // ELIMINADO: trackEventFromRequest() - ahora es client-side via navigator.sendBeacon()
-
-    // SCRIPTS - GA4 Complete Event Tracking Stack (ALL CLIENT-SIDE)
-    const nonce           = generateNonce()
-    const gcmScript       = buildGCMScript(consent, region, nonce)
-    const zarazScript     = buildZarazScript({ consent, geo, sessionId, region })
-    const utmScript       = buildUTMScript(ANALYTICS_ENDPOINT)
-    const timeTrackScript = buildTimeTrackerScript(sessionId, ANALYTICS_ENDPOINT)
-
-    // Phase 1-2: LMS, Social, Form, Search, Video, Error Tracking
-    const learningScript        = buildLearningTrackerScript()
-    const moodleAdvancedScript  = buildMoodleAdvancedTrackerScript()
-    const buddybossScript       = buildBuddyBossTrackerScript()
-    const formScript            = buildFormTrackerScript(ANALYTICS_ENDPOINT)
-    const searchScript          = buildSearchTrackerScript(ANALYTICS_ENDPOINT)
-    const videoScript           = buildVideoTrackerScript(ANALYTICS_ENDPOINT)
-    const errorScript           = buildErrorTrackerScript(ANALYTICS_ENDPOINT)
-
-    // Base Response para HTMLRewriter
-    const baseResponse = new Response(response.body, {
-      status: response.status,
-      headers
-    })
-
-    // HTMLRewriter: Inject all analytics scripts
-    let rewritten = new HTMLRewriter()
-      .on('head', {
-        element(el) {
-          el.prepend(gcmScript,  { html: true })
-          el.append(zarazScript, { html: true })
-          el.append(utmScript,   { html: true })
-        }
-      })
-      .on('body', {
-        element(el) {
-          // Core tracking
-          el.append(timeTrackScript, { html: true })
-          // LMS Tracking (Moodle)
-          el.append(learningScript,  { html: true })
-          el.append(moodleAdvancedScript, { html: true })
-          // Social Community (BuddyBoss + GamiPress)
-          el.append(buddybossScript, { html: true })
-          // Forms, Search, Video, Error tracking
-          el.append(formScript,      { html: true })
-          el.append(searchScript,    { html: true })
-          el.append(videoScript,     { html: true })
-          el.append(errorScript,     { html: true })
-        }
-      })
-      .transform(baseResponse)
-
-    // SCRIPT BLOCKER
-    rewritten = blockScripts(rewritten, consent)
-
-    // BANNER: SIEMPRE en HTML, como la versión vieja
-    const langHeader = request.headers.get('accept-language') || 'en'
-    const langCode   = langHeader.split(',')[0].split('-')[0].toLowerCase()
-    const t          = TRANSLATIONS[langCode] || TRANSLATIONS.en
-
-    const bannerHtml = buildBannerHTML({
-      region,
-      consent,
-      endpoint     : ANALYTICS_ENDPOINT,
-      legalHubPath : '/legal-hub/',
-      t
-    })
-
-    return new HTMLRewriter()
-      .on('body', {
-        element(el) {
-          el.append(bannerHtml, { html: true })
-        }
-      })
-      .transform(rewritten)
+    return response
   }
 }
