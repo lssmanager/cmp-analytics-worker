@@ -97,53 +97,50 @@ const TRANSLATIONS = {
 
 const LOGO = "https://media.learnsocialstudies.com/wp-content/uploads/2026/03/08101052/Complianz-Logo-1.avif"
 
-function getLang(region, country, acceptLanguage = "") {
-  // ESTRATEGIA: Detectar idioma en orden de prioridad
-  // 1. Mapeo país específico (para casos críticos: DE, FR, ES)
-  // 2. Accept-Language header (preferencia del navegador)
-  // 3. Fallback región (defecto por región)
-  // 4. Inglés (fallback final)
+function getLang(country, acceptLanguage = "") {
+  // ORDEN DE PRIORIDAD:
+  // 1. País (detectado por IP) → idioma oficial
+  // 2. Navegador (Accept-Language header)
+  // 3. Inglés (fallback)
 
-  // Mapeo MÍNIMO: Solo países con idiomas específicos soportados
-  // No mapear TODOS los países - dejar que Accept-Language haga el resto
+  // Mapeo completo: país → idioma oficial
   const countryToLang = {
-    // Critical: Países grandes europeos donde importa el idioma nativo
-    "DE": "de", "AT": "de", "CH": "de",  // German
-    "FR": "fr", "BE": "fr",              // French
-    "ES": "es",                          // Spanish
-    "IT": "it",                          // Italian
-    "PT": "pt", "BR": "pt",              // Portuguese
+    // Spanish-speaking countries
+    "ES": "es", "MX": "es", "AR": "es", "CO": "es", "PE": "es", "VE": "es",
+    "CL": "es", "EC": "es", "BO": "es", "PY": "es", "UY": "es", "GT": "es",
+    "SV": "es", "HN": "es", "NI": "es", "CR": "es", "PA": "es", "CU": "es",
+    "DO": "es", "PR": "es",
+    // French-speaking countries
+    "FR": "fr", "CA": "fr", "BE": "fr", "CH": "fr", "LU": "fr",
+    // German-speaking countries
+    "DE": "de", "AT": "de", "CH": "de", "LI": "de",
+    // Italian-speaking countries
+    "IT": "it", "CH": "it",
+    // Portuguese-speaking countries
+    "PT": "pt", "BR": "pt", "AO": "pt", "MZ": "pt",
+    // English-speaking (default for many)
+    "US": "en", "GB": "en", "AU": "en", "NZ": "en", "IE": "en",
   }
 
-  // PASO 1: Intenta mapeo por país específico (solo los críticos)
+  // PASO 1: Si país está en mapeo → usa idioma oficial del país
   if (country && countryToLang[country]) {
     return countryToLang[country]
   }
 
-  // PASO 2: Intenta Accept-Language header del navegador
-  // Ej: "es-GT, es;q=0.9, en;q=0.8" → extrae "es"
+  // PASO 2: Fallback a Accept-Language del navegador
+  const supported = ["es", "fr", "de", "it", "pt", "en"]
   if (acceptLanguage) {
     const langs = acceptLanguage.split(",")
     for (let langStr of langs) {
-      const lang = langStr.trim().split(";")[0].toLowerCase()
-      if (lang.startsWith("es")) return "es"      // es, es-MX, es-GT, etc.
-      if (lang.startsWith("fr")) return "fr"      // fr, fr-CA, etc.
-      if (lang.startsWith("de")) return "de"      // de, de-AT, etc.
-      if (lang.startsWith("it")) return "it"      // it, it-IT, etc.
-      if (lang.startsWith("pt")) return "pt"      // pt, pt-BR, etc.
-      if (lang.startsWith("en")) return "en"      // en, en-US, etc.
+      const base = langStr.trim().split("-")[0].toLowerCase()
+      if (supported.includes(base)) {
+        return base
+      }
     }
   }
 
-  // PASO 3: Fallback por región
-  const regionToLang = {
-    eu: "en",      // EU: defecto inglés (usuarios variados)
-    us: "en",
-    ca: "en",
-    global: "en"
-  }
-
-  return regionToLang[region] || "en"
+  // PASO 3: Inglés (fallback universal)
+  return "en"
 }
 
 const BASE_CSS = `
@@ -379,31 +376,28 @@ ${BASE_CSS}
     )
   })
 
-  // ── AUTO-DISMISS (solo global/us/ca) ──────────────────
-  // EU: banner permanece visible bloqueando scripts hasta aceptación
-  // global/us/ca: auto-accept con scroll/dismiss (sesión)
-  var gone=false
-  function autoDismiss(){
-    if(gone)return;gone=true
-    if(IS_EU){
-      // EU: NO hacer nada - banner permanece visible bloqueando scripts
-      // Usuario DEBE aceptar mínimo cookies funcionales o guardar preferencias
-      return
+  // ── AUTO-DISMISS (SOLO para global/us/ca, NO para EU) ──
+  // EU: banner persiste SIEMPRE hasta acción explícita
+  // global/us/ca: auto-accept con scroll/timeout (sesión)
+
+  if (!IS_EU) {
+    // Solo para non-EU: agregar listeners de scroll/touch
+    var gone=false
+    function autoDismiss(){
+      if(gone)return;gone=true
+      // global/us/ca: accept all con cookie de sesión (auto-accept implícito)
+      cmpSend(
+        {necessary:true,analytics:true,marketing:true,preferences:true},
+        0,      // sesión → no persiste, solo para esta sesión
+        false
+      )
     }
-    // global/us/ca: accept all con cookie de sesión (auto-accept implícito)
-    cmpSend(
-      {necessary:true,analytics:true,marketing:true,preferences:true},
-      0,      // sesión → no persiste, solo para esta sesión
-      false
-    )
-  }
 
-  // Scroll/dismiss triggers auto-dismissal para global/us/ca
-  window.addEventListener("scroll",   autoDismiss,{once:true,passive:true})
-  window.addEventListener("touchend", autoDismiss,{once:true,passive:true})
+    // Scroll/dismiss triggers auto-dismissal para global/us/ca
+    window.addEventListener("scroll",   autoDismiss,{once:true,passive:true})
+    window.addEventListener("touchend", autoDismiss,{once:true,passive:true})
 
-  // Countdown (10s) solo para global/us/ca - luego auto-accept
-  if(!IS_EU){
+    // Countdown (10s) solo para global/us/ca - luego auto-accept
     var n=10,cd=g("cmp-countdown")
     var ti=setInterval(function(){
       n--;if(cd)cd.textContent=n
@@ -418,18 +412,17 @@ export async function injectBanner(response, {
   region,
   consent,        // rawConsent (null si no hay cookie)
   mergedConsent,  // consent con defaults
-  request,
   endpoint,
   legalHubPath,
-  country,        // ISO country code
-  acceptLanguage  // Accept-Language header
+  country,        // País (cf.country)
+  acceptLanguage  // Accept-Language header (fallback)
 }) {
   const hasCookie = consent !== null && consent !== undefined
 
   // Si YA hay cookie de consent, no mostramos banner
   if (hasCookie) return response
 
-  const lang = getLang(region, country, acceptLanguage)
+  const lang = getLang(country, acceptLanguage)
   const t    = TRANSLATIONS[lang] || TRANSLATIONS.en
   const html = buildBannerHTML({
     region,
