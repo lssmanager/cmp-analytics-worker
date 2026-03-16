@@ -24,7 +24,7 @@ import { buildUserLifecycleTrackerScript,
          buildWebVitalsTrackerScript,
          buildScrollDepthTrackerScript }            from "./modules/standardEventTrackers.js"
 import { buildBuddyBossTrackerScript }              from "./modules/buddyBossTracker.js"
-import { randomId, ONE_YEAR }                       from "./modules/utils.js"
+import { randomId, ONE_YEAR, anonymizeIP }                       from "./modules/utils.js"
 
 export default {
   async fetch(request, env, ctx) {
@@ -214,7 +214,12 @@ export default {
 
       // 4. Banner CMP
       response = await injectBanner(response, {
-        region, consent, endpoint: "/cmp/consent", legalHubPath: "/legal-hub"
+        region,
+        consent: rawConsent,        // rawConsent para detectar si ya hay cookie
+        mergedConsent: consent,     // consent con defaults para mostrar en modal
+        request,                    // request para obtener idioma con getLang()
+        endpoint: "/cmp/consent",
+        legalHubPath: "/legal-hub"
       })
 
       // 5. Restaurar scripts tras consentimiento
