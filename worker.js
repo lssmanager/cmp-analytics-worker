@@ -15,7 +15,7 @@ import { routePolicies }                  from './modules/policyRouter.js'
 import { anonymizeIP }                    from './modules/utils.js'
 import { trackPageview,
          trackEventFromRequest }          from './modules/analytics.js'
-import * as bannerMod                     from './modules/banner.js'
+import { buildBannerHTML }                from './modules/banner.js'
 
 const ANALYTICS_ENDPOINT = '/__cmp/analytics'
 
@@ -115,14 +115,7 @@ export default {
     const timeTrackScript = buildTimeTrackerScript(sessionId, ANALYTICS_ENDPOINT)
 
     /* ── BANNER (compatible con cualquier export de banner.js) ── */
-    const _bannerFn = bannerMod.buildBannerResponse
-                   ?? bannerMod.buildBannerHTML
-                   ?? bannerMod.buildBanner
-                   ?? bannerMod.render
-                   ?? bannerMod.default
-    const bannerHTML = typeof _bannerFn === 'function'
-      ? await _bannerFn(request, consent, region)
-      : _fallbackBanner(region)
+    const bannerHTML = await buildBannerHTML(request, consent, region)
 
     /* ── INYECTAR EN HTML ── */
     let rewritten = new HTMLRewriter()

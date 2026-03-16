@@ -380,3 +380,14 @@ export async function injectBanner(response, { region, consent, mergedConsent, r
     .on("body", { element(el) { el.append(html, { html: true }) } })
     .transform(response)
 }
+
+export async function buildBannerHTML(request, consent, region) {
+  const lang        = getLang(request)
+  const t           = TRANSLATIONS[lang]
+  const cookieLink  = `/legal-hub/cookie-policy-${region === 'eu' ? 'eu' : region === 'ca' ? 'ca' : 'us'}/`
+  const privacyLink = `/legal-hub/privacy-statement-${region === 'eu' ? 'eu' : region === 'us' ? 'us' : region === 'ca' ? 'ca' : 'us'}/`
+  const legalHub    = '/legal-hub/'
+  const msg         = t.msgs[region] ?? t.msgs.global
+  const show        = !consent || (!consent.analytics && !consent.marketing)
+  return barHTML(t, msg, cookieLink, privacyLink, legalHub, consent, show)
+}
