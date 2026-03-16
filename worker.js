@@ -266,6 +266,23 @@ export default {
           }
         } })
         .transform(response)
+
+      // Personalized HTML (region/language/cookie) should not be shared from cache.
+      const h = new Headers(response.headers)
+      const varyCurrent = h.get("Vary") || ""
+      const varyParts = varyCurrent.split(",").map(v => v.trim()).filter(Boolean)
+      const varySet = new Set(varyParts)
+      varySet.add("Accept-Language")
+      varySet.add("CF-IPCountry")
+      varySet.add("Cookie")
+      h.set("Vary", Array.from(varySet).join(", "))
+      h.set("Cache-Control", "private, no-store, max-age=0")
+
+      response = new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: h
+      })
     }
 
     return response
