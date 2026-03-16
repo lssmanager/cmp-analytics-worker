@@ -115,7 +115,7 @@ export default {
     const timeTrackScript = buildTimeTrackerScript(sessionId, ANALYTICS_ENDPOINT)
 
     /* ── BANNER (compatible con cualquier export de banner.js) ── */
-    const bannerHTML = await buildBannerHTML(request, consent, region)
+    const bannerHTML = buildBannerHTML({ region, consent, endpoint: ANALYTICS_ENDPOINT, legalHubPath: '/legal-hub/' })
 
     /* ── INYECTAR EN HTML ── */
     let rewritten = new HTMLRewriter()
