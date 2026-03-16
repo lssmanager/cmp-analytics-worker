@@ -18,6 +18,9 @@ export function buildGCMScript(consent) {
   function applyUpdate() {
     if (window.zaraz) {
       zaraz.set("google_consent_update", U);
+      window.dispatchEvent(new CustomEvent("cmp:analytics_consent_changed", {
+        detail: { analytics: U.analytics_storage === "granted", marketing: U.ad_storage === "granted" }
+      }));
     } else {
       setTimeout(applyUpdate, 100);
     }
@@ -33,6 +36,16 @@ export function buildGCMScript(consent) {
       ad_personalization : c.marketing  ? "granted" : "denied",
       analytics_storage  : c.analytics  ? "granted" : "denied"
     });
+
+    window.dispatchEvent(new CustomEvent("cmp:analytics_consent_changed", {
+      detail: { analytics: !!c.analytics, marketing: !!c.marketing }
+    }));
+
+    if (!c.marketing) {
+      ["_gcl_au", "_fbp"].forEach(function(name) {
+        document.cookie = name + "=; Max-Age=0; Path=/";
+      });
+    }
   });
 
   applyUpdate();

@@ -1,4 +1,4 @@
-import { EU_COUNTRIES } from "../config/regions.js"
+import { EU_COUNTRIES } from "./regions.js"
 
 export function detectRegion(cf = {}) {
   if (cf.isEUCountry === "1") return "eu"
