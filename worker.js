@@ -13,6 +13,7 @@ import { buildLearningTrackerScript } from './modules/learningTracker.js'
 import { buildFormTrackerScript } from './modules/formTracker.js'
 import { buildSearchTrackerScript } from './modules/searchTracker.js'
 import { buildVideoTrackerScript } from './modules/videoTracker.js'
+import { buildErrorTrackerScript } from './modules/errorTracker.js'
 import { applyHeaders } from './modules/headers.js'
 import {
   readSessionId,
@@ -161,11 +162,12 @@ export default {
     const utmScript       = buildUTMScript(ANALYTICS_ENDPOINT)
     const timeTrackScript = buildTimeTrackerScript(sessionId, ANALYTICS_ENDPOINT)
 
-    // NEW: Tracking modules (Phase 1)
+    // NEW: Tracking modules (Phase 1 + Phase 2)
     const learningScript  = buildLearningTrackerScript()
     const formScript      = buildFormTrackerScript(ANALYTICS_ENDPOINT)
     const searchScript    = buildSearchTrackerScript(ANALYTICS_ENDPOINT)
     const videoScript     = buildVideoTrackerScript(ANALYTICS_ENDPOINT)
+    const errorScript     = buildErrorTrackerScript(ANALYTICS_ENDPOINT)
 
     // Base Response para HTMLRewriter
     const baseResponse = new Response(response.body, {
@@ -186,11 +188,13 @@ export default {
         element(el) {
           // Core tracking
           el.append(timeTrackScript, { html: true })
-          // New tracking modules (Phase 1)
+          // Phase 1: E-learning, Forms, Search, Video tracking
           el.append(learningScript,  { html: true })
           el.append(formScript,      { html: true })
           el.append(searchScript,    { html: true })
           el.append(videoScript,     { html: true })
+          // Phase 2: Error & Performance monitoring
+          el.append(errorScript,     { html: true })
         }
       })
       .transform(baseResponse)
