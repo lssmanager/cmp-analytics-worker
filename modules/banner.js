@@ -1,11 +1,12 @@
+export const TRANSLATIONS = {
+  eu:     "Usamos cookies. Requerimos consentimiento bajo GDPR antes de activar analytics o publicidad.",
+  us:     "Puedes optar por no participar en la venta de datos bajo CCPA.",
+  ca:     "Requerimos consentimiento bajo normativa canadiense de privacidad.",
+  global: "Este sitio usa cookies para mejorar tu experiencia."
+}
+
 export function buildBannerHTML({ region, consent, endpoint, legalHubPath }) {
   const shown = !consent || (!consent.analytics && !consent.marketing)
-  const msgs  = {
-    eu:     "Usamos cookies. Requerimos consentimiento bajo GDPR antes de activar analytics o publicidad.",
-    us:     "Puedes optar por no participar en la venta de datos bajo CCPA.",
-    ca:     "Requerimos consentimiento bajo normativa canadiense de privacidad.",
-    global: "Este sitio usa cookies para mejorar tu experiencia."
-  }
 
   return `
 <div id="cmp-banner" style="position:fixed;left:12px;right:12px;bottom:12px;
@@ -13,7 +14,7 @@ export function buildBannerHTML({ region, consent, endpoint, legalHubPath }) {
   z-index:999999;font-family:system-ui;font-size:14px;
   box-shadow:0 20px 60px rgba(0,0,0,.4);display:${shown ? "block" : "none"}">
   <div style="max-width:1100px;margin:auto">
-    <p style="margin:0 0 12px">${msgs[region] || msgs.global}</p>
+    <p style="margin:0 0 12px">${TRANSLATIONS[region] || TRANSLATIONS.global}</p>
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:13px">
       <label><input type="checkbox" id="cmp-analytics"   ${consent?.analytics   ? "checked" : ""}> Analytics</label>
       <label><input type="checkbox" id="cmp-marketing"   ${consent?.marketing   ? "checked" : ""}> Marketing</label>
