@@ -24,8 +24,8 @@ export default {
     const url = new URL(request.url)
 
     // BYPASS: assets, crawlers, wp-admin
-    const cfWorker = request.headers.get('cf-worker') || ''
-    const isAsset  = /\.(js|css|woff2?|png|jpg|jpeg|gif|svg|ico|webp|map|txt|xml)(\?|$)/i.test(url.pathname)
+    const cfWorker  = request.headers.get('cf-worker') || ''
+    const isAsset   = /\.(js|css|woff2?|png|jpg|jpeg|gif|svg|ico|webp|map|txt|xml)(\?|$)/i.test(url.pathname)
     const isWpAdmin = url.pathname.startsWith('/wp-admin')
     if (cfWorker || isAsset || isWpAdmin) return fetch(request)
 
@@ -116,6 +116,12 @@ export default {
     const utmScript       = buildUTMScript(ANALYTICS_ENDPOINT)
     const timeTrackScript = buildTimeTrackerScript(sessionId, ANALYTICS_ENDPOINT)
 
+    // Base Response para HTMLRewriter
+    const baseResponse = new Response(response.body, {
+      status: response.status,
+      headers
+    })
+
     // HTMLRewriter: head + body (sin banner aquí)
     let rewritten = new HTMLRewriter()
       .on('head', {
@@ -130,7 +136,7 @@ export default {
           el.append(timeTrackScript, { html: true })
         }
       })
-      .transform(new Response(response.body, { status: response.status, headers }))
+      .transform(baseResponse)
 
     // SCRIPT BLOCKER
     rewritten = blockScripts(rewritten, consent)
