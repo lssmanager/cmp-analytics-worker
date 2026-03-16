@@ -1,0 +1,253 @@
+{
+  "version": "2.0",
+  "name": "CMP Analytics Worker - GA4 Auto-Send",
+  "description": "Automatic event routing to GA4 from worker with Zaraz triggers",
+  "metadata": {
+    "platform": "Cloudflare Zaraz",
+    "integration": "GA4 Measurement Protocol",
+    "ga4_events_count": 30,
+    "custom_events_count": 15
+  },
+  "ga4_config": {
+    "measurement_id": "G-XXXXXXXXXX",
+    "api_secret": "CONFIGURED_IN_WORKER_SECRETS",
+    "send_page_view": true,
+    "anonymize_ip": false,
+    "allow_google_signals": true,
+    "allow_ad_personalization": true,
+    "restrict_data_processing": false
+  },
+  "triggers": [
+    {
+      "id": "trigger_login",
+      "name": "Login Event",
+      "event_type": "login",
+      "ga4_event": "login",
+      "condition": { "event_type": "login" },
+      "parameters": {
+        "method": "{{event.detail.method}}",
+        "engagement_time_msec": "100"
+      }
+    },
+    {
+      "id": "trigger_signup",
+      "name": "Sign Up Event",
+      "event_type": "sign_up",
+      "ga4_event": "sign_up",
+      "condition": { "event_type": "sign_up" },
+      "parameters": {
+        "method": "{{event.detail.method}}",
+        "engagement_time_msec": "100"
+      }
+    },
+    {
+      "id": "trigger_first_visit",
+      "name": "First Visit",
+      "event_type": "first_visit",
+      "ga4_event": "first_visit",
+      "condition": { "event_type": "first_visit" },
+      "parameters": {
+        "page_location": "{{page_location}}",
+        "page_referrer": "{{page_referrer}}"
+      }
+    },
+    {
+      "id": "trigger_page_view",
+      "name": "Page View",
+      "event_type": "page_view",
+      "ga4_event": "page_view",
+      "condition": { "event_type": "page_view" },
+      "parameters": {
+        "page_location": "{{page_location}}",
+        "page_title": "{{page_title}}",
+        "page_referrer": "{{page_referrer}}"
+      }
+    },
+    {
+      "id": "trigger_scroll_depth",
+      "name": "Scroll Depth",
+      "event_type": "scroll_depth",
+      "ga4_event": "scroll",
+      "condition": { "event_type": "scroll_depth" },
+      "parameters": {
+        "scroll_percent": "{{event.detail.scroll_percent}}",
+        "page_location": "{{page_location}}"
+      }
+    },
+    {
+      "id": "trigger_click",
+      "name": "Click Event",
+      "event_type": "click",
+      "ga4_event": "click",
+      "condition": { "event_type": "click" },
+      "parameters": {
+        "link_id": "{{event.detail.link_id}}",
+        "link_url": "{{event.detail.link_url}}",
+        "link_text": "{{event.detail.link_text}}"
+      }
+    },
+    {
+      "id": "trigger_file_download",
+      "name": "File Download",
+      "event_type": "file_download",
+      "ga4_event": "file_download",
+      "condition": { "event_type": "file_download" },
+      "parameters": {
+        "file_name": "{{event.detail.file_name}}",
+        "file_extension": "{{event.detail.file_extension}}"
+      }
+    },
+    {
+      "id": "trigger_view_item",
+      "name": "View Item",
+      "event_type": "view_item",
+      "ga4_event": "view_item",
+      "condition": { "event_type": "view_item" },
+      "parameters": {
+        "item_id": "{{event.detail.item_id}}",
+        "item_name": "{{event.detail.item_name}}",
+        "value": "{{event.detail.value}}",
+        "currency": "{{event.detail.currency}}"
+      }
+    },
+    {
+      "id": "trigger_add_to_cart",
+      "name": "Add to Cart",
+      "event_type": "add_to_cart",
+      "ga4_event": "add_to_cart",
+      "condition": { "event_type": "add_to_cart" },
+      "parameters": {
+        "item_id": "{{event.detail.item_id}}",
+        "item_name": "{{event.detail.item_name}}",
+        "value": "{{event.detail.value}}",
+        "currency": "{{event.detail.currency}}"
+      }
+    },
+    {
+      "id": "trigger_purchase",
+      "name": "Purchase",
+      "event_type": "purchase",
+      "ga4_event": "purchase",
+      "condition": { "event_type": "purchase" },
+      "parameters": {
+        "transaction_id": "{{event.detail.transaction_id}}",
+        "value": "{{event.detail.value}}",
+        "tax": "{{event.detail.tax}}",
+        "shipping": "{{event.detail.shipping}}",
+        "currency": "{{event.detail.currency}}"
+      }
+    },
+    {
+      "id": "trigger_quiz_complete",
+      "name": "Quiz Complete",
+      "event_type": "quiz_complete",
+      "ga4_event": "quiz_complete",
+      "condition": { "event_type": "quiz_complete" },
+      "parameters": {
+        "course_id": "{{event.detail.course_id}}",
+        "course_name": "{{event.detail.course_name}}",
+        "quiz_score": "{{event.detail.score}}",
+        "total_points": "{{event.detail.total_points}}"
+      }
+    },
+    {
+      "id": "trigger_course_enrollment",
+      "name": "Course Enrollment",
+      "event_type": "course_enrollment",
+      "ga4_event": "course_enrollment",
+      "condition": { "event_type": "course_enrollment" },
+      "parameters": {
+        "course_id": "{{event.detail.course_id}}",
+        "course_name": "{{event.detail.course_name}}",
+        "enrollment_type": "{{event.detail.enrollment_type}}"
+      }
+    },
+    {
+      "id": "trigger_moodle_engagement_risk",
+      "name": "Moodle Engagement Risk",
+      "event_type": "moodle_engagement_risk",
+      "ga4_event": "moodle_engagement_risk",
+      "condition": { "event_type": "moodle_engagement_risk" },
+      "parameters": {
+        "course_id": "{{event.detail.course_id}}",
+        "risk_level": "{{event.detail.risk_level}}",
+        "days_inactive": "{{event.detail.days_inactive}}"
+      }
+    },
+    {
+      "id": "trigger_buddyboss_group_joined",
+      "name": "BuddyBoss Group Joined",
+      "event_type": "buddyboss_group_joined",
+      "ga4_event": "buddyboss_group_joined",
+      "condition": { "event_type": "buddyboss_group_joined" },
+      "parameters": {
+        "group_id": "{{event.detail.group_id}}",
+        "group_name": "{{event.detail.group_name}}",
+        "group_type": "{{event.detail.group_type}}"
+      }
+    },
+    {
+      "id": "trigger_buddyboss_profile_viewed",
+      "name": "BuddyBoss Profile Viewed",
+      "event_type": "buddyboss_profile_viewed",
+      "ga4_event": "buddyboss_profile_viewed",
+      "condition": { "event_type": "buddyboss_profile_viewed" },
+      "parameters": {
+        "profile_user_id": "{{event.detail.profile_user_id}}",
+        "viewer_role": "{{event.detail.viewer_role}}"
+      }
+    },
+    {
+      "id": "trigger_buddyboss_activity_posted",
+      "name": "BuddyBoss Activity Posted",
+      "event_type": "buddyboss_activity_posted",
+      "ga4_event": "buddyboss_activity_posted",
+      "condition": { "event_type": "buddyboss_activity_posted" },
+      "parameters": {
+        "activity_type": "{{event.detail.activity_type}}",
+        "contains_mention": "{{event.detail.contains_mention}}"
+      }
+    }
+  ],
+  "user_properties": [
+    {
+      "name": "user_language",
+      "source": "page_context",
+      "fallback": "document.documentElement.lang || 'en'"
+    },
+    {
+      "name": "user_country",
+      "source": "worker_header",
+      "fallback": "unknown"
+    },
+    {
+      "name": "user_segment",
+      "source": "page_context",
+      "fallback": "visitor"
+    },
+    {
+      "name": "subscription_status",
+      "source": "page_context",
+      "fallback": "free"
+    }
+  ],
+  "deployment_checklist": {
+    "worker_deployed": false,
+    "ga4_measurement_id_set": false,
+    "ga4_api_secret_configured": false,
+    "zaraz_ga4_tag_created": false,
+    "triggers_imported": false,
+    "ga4_real_time_verified": false,
+    "zaraz_recent_events_verified": false
+  },
+  "next_steps": [
+    "1. Get GA4 Measurement ID from Google Analytics 4 Dashboard",
+    "2. Set GA4_MEASUREMENT_ID in wrangler.toml",
+    "3. Create GA4_API_SECRET in Cloudflare Workers secret manager",
+    "4. Deploy worker: wrangler deploy",
+    "5. Create GA4 tag in Zaraz with Measurement ID",
+    "6. Import these triggers into Zaraz",
+    "7. Verify events in GA4 Real-time Report",
+    "8. Monitor Zaraz Recent Events dashboard"
+  ]
+}

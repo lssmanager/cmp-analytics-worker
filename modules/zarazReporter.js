@@ -1,477 +1,286 @@
-/**
- * Zaraz Analytics Reporter - GA4 Complete Event Tracking
- * Replaces Analytify with native GA4 standard events
- * Sends real-time events to Google Analytics 4 + Google Ads
- */
+export function buildZarazReporterScript(endpoint) {
+  return `
+<script>
+(function() {
+  var EP = ${JSON.stringify(endpoint)};
 
-export function buildZarazScript({ consent, geo, sessionId, region }) {
-  const ctx = JSON.stringify({
-    session_id: sessionId || "",
-    country: geo?.country || "",
-    timezone: geo?.timezone || "",
-    region: region || "global",
-    analytics: !!(consent?.analytics),
-    marketing: !!(consent?.marketing),
-    preferences: !!(consent?.preferences),
-  })
+  // ════════════════════════════════════════════════
+  // GA4 STANDARD PARAMETERS & DEVICE INFO
+  // ════════════════════════════════════════════════
 
-  return `<script>
-(function(){
-  // ═══════════════════════════════════════════════════════════════════════
-  // ZARAZ INITIALIZATION & CONTEXT
-  // ═══════════════════════════════════════════════════════════════════════
-
-  function waitZaraz(fn, tries) {
-    if (window.zaraz) { fn(); return; }
-    if ((tries||0) > 20) return;
-    setTimeout(() => waitZaraz(fn, (tries||0)+1), 200);
+  /**
+   * Get or create session ID
+   */
+  function getSessionId() {
+    var sid = sessionStorage.getItem("cmp_session_id");
+    if (!sid) {
+      sid = "session_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+      sessionStorage.setItem("cmp_session_id", sid);
+    }
+    return sid;
   }
 
-  waitZaraz(function(){
-    var ctx = ${ctx};
+  /**
+   * Parse User-Agent for device info
+   */
+  function parseUA() {
+    var ua = navigator.userAgent.toLowerCase();
+    var result = {
+      browser: ua.includes("firefox") ? "firefox" : ua.includes("edg") ? "edge"
+               : ua.includes("chrome") ? "chrome" : ua.includes("safari") ? "safari" : "other",
+      os: ua.includes("android") ? "android" : (ua.includes("iphone") || ua.includes("ipad")) ? "ios"
+          : ua.includes("windows") ? "windows" : ua.includes("mac") ? "macos"
+          : ua.includes("linux") ? "linux" : "other",
+      device: (ua.includes("mobile") || ua.includes("iphone")) ? "mobile"
+              : (ua.includes("tablet") || ua.includes("ipad")) ? "tablet" : "desktop"
+    };
+    return result;
+  }
 
-    // ═ GLOBAL CONTEXT — Set once per session ═
-    zaraz.set("session_id", ctx.session_id, { scope: "session" });
-    zaraz.set("country", ctx.country, { scope: "session" });
-    zaraz.set("timezone", ctx.timezone, { scope: "session" });
-    zaraz.set("privacy_region", ctx.region, { scope: "session" });
-    zaraz.set("consent_analytics", ctx.analytics, { scope: "page" });
-    zaraz.set("consent_marketing", ctx.marketing, { scope: "page" });
-    zaraz.set("consent_preferences", ctx.preferences, { scope: "page" });
+  /**
+   * Get device parameters for GA4
+   */
+  function getDeviceParams() {
+    var ua = parseUA();
+    return {
+      browser: ua.browser,
+      operating_system: ua.os,
+      device_category: ua.device,
+      screen_resolution: window.screen ? (window.screen.width + "x" + window.screen.height) : null,
+      language: navigator.language || "unknown"
+    };
+  }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 1. PAGEVIEW & SESSION (GA4 Standard)
-    // ═══════════════════════════════════════════════════════════════════════
+  /**
+   * Get UTM parameters from URL
+   */
+  function getUTMParams() {
+    var params = new URLSearchParams(location.search);
+    return {
+      utm_source: params.get("utm_source") || null,
+      utm_medium: params.get("utm_medium") || null,
+      utm_campaign: params.get("utm_campaign") || null,
+      utm_content: params.get("utm_content") || null,
+      utm_term: params.get("utm_term") || null
+    };
+  }
 
-    zaraz.track("page_view", {
-      page_title: document.title,
-      page_path: location.pathname,
-      page_location: location.href,
-      page_referrer: document.referrer
-    });
+  /**
+   * Set global user properties in Zaraz
+   */
+  function setGlobalUserProperties() {
+    if (!window.zaraz) return;
 
-    // Session start indicator (first page only)
-    if (!window.cmpAnalyticsSessionStarted) {
-      window.cmpAnalyticsSessionStarted = true;
-      zaraz.track("session_start", {
-        session_id: ctx.session_id
-      });
-    }
+    // Get HTML lang attribute
+    var language = document.documentElement.lang || navigator.language || "en";
+    zaraz.set("user_language", language, { scope: "user" });
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 2. CAMPAIGN & ATTRIBUTION (UTM Tracking)
-    // ═══════════════════════════════════════════════════════════════════════
+    // Get country from page context or default
+    var country = document.querySelector("[data-user-country]")?.dataset?.userCountry || "unknown";
+    zaraz.set("user_country", country, { scope: "user" });
 
-    var p = new URLSearchParams(location.search);
-    if (p.get("utm_source")) {
-      zaraz.track("campaign_hit", {
-        utm_source: p.get("utm_source") || "",
-        utm_medium: p.get("utm_medium") || "",
-        utm_campaign: p.get("utm_campaign") || "",
-        utm_content: p.get("utm_content") || "",
-        utm_term: p.get("utm_term") || "",
-        page_path: location.pathname
-      });
-    }
+    // Get user segment from page context
+    var segment = document.querySelector("[data-user-segment]")?.dataset?.userSegment || "visitor";
+    zaraz.set("user_segment", segment, { scope: "user" });
 
-    // gclid / fbclid attribution
-    if (p.get("gclid")) zaraz.set("gclid", p.get("gclid"));
-    if (p.get("fbclid")) zaraz.set("fbclid", p.get("fbclid"));
+    // Get subscription status
+    var subscriptionStatus = document.querySelector("[data-subscription-status]")?.dataset?.subscriptionStatus || "free";
+    zaraz.set("subscription_status", subscriptionStatus, { scope: "user" });
+  }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 3. CONSENT & COMPLIANCE Event
-    // ═══════════════════════════════════════════════════════════════════════
+  /**
+   * Set device properties in Zaraz session
+   */
+  function setDeviceProperties() {
+    if (!window.zaraz) return;
 
-    zaraz.track("consent_loaded", {
-      analytics_consent: ctx.analytics,
-      marketing_consent: ctx.marketing,
-      preferences_consent: ctx.preferences,
-      consent_region: ctx.region
-    });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // 4. ENGAGEMENT TRACKING
-    // ═══════════════════════════════════════════════════════════════════════
-
-    // Scroll Depth (25%, 50%, 75%, 90%)
-    var scrollSeen = {};
-    window.addEventListener("scroll", function () {
-      var el = document.documentElement;
-      var pct = Math.round(el.scrollTop / (el.scrollHeight - el.clientHeight) * 100);
-      [25, 50, 75, 90].forEach(function (m) {
-        if (pct >= m && !scrollSeen[m]) {
-          scrollSeen[m] = true;
-          zaraz.track("scroll", {
-            percent_scrolled: m,
-            page_path: location.pathname
-          });
-        }
-      });
-    }, { passive: true });
-
-    // Time on Page (when leaving tab)
-    var pageStartTime = Date.now();
-    window.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "hidden") {
-        var timeSpent = Math.round((Date.now() - pageStartTime) / 1000);
-        zaraz.track("user_engagement", {
-          engagement_time_msec: timeSpent * 1000,
-          page_path: location.pathname
-        });
+    var deviceParams = getDeviceParams();
+    Object.entries(deviceParams).forEach(function(entry) {
+      var key = entry[0];
+      var value = entry[1];
+      if (value) {
+        zaraz.set(key, value, { scope: "session" });
       }
     });
+  }
 
-    // Click Tracking
-    document.addEventListener("click", function (e) {
-      var el = e.target.closest("a, button, [data-track]");
+  function hasAnalyticsConsent() {
+    var c = document.cookie.split("; ").find(function(v){ return v.indexOf("consent=") === 0; });
+    return !!(c && c.indexOf("analytics:true") !== -1);
+  }
+
+  /**
+   * Enhanced emit with GA4 standard parameters
+   */
+  function emit(eventName, props) {
+    var sessionId = getSessionId();
+    var timestamp = Date.now();
+    var deviceParams = getDeviceParams();
+    var utmParams = getUTMParams();
+
+    // Combine properties with GA4 standard parameters
+    var ga4Props = Object.assign({}, props || {}, {
+      // GA4 Required Parameters
+      event_name: eventName,
+      timestamp_micros: timestamp * 1000, // Convert to microseconds
+      session_id: sessionId,
+      engagement_time_msec: props?.engagement_time_msec || 100,
+
+      // Device info
+      browser: deviceParams.browser,
+      operating_system: deviceParams.os,
+      device_category: deviceParams.device,
+      language: deviceParams.language,
+
+      // Page context
+      page_location: location.href,
+      page_path: location.pathname,
+      page_title: document.title,
+      page_referrer: document.referrer || null,
+
+      // UTM parameters
+      utm_source: utmParams.utm_source,
+      utm_medium: utmParams.utm_medium,
+      utm_campaign: utmParams.utm_campaign,
+      utm_content: utmParams.utm_content,
+      utm_term: utmParams.utm_term
+    });
+
+    var payload = {
+      type: eventName,
+      eventName: eventName,
+      page: location.pathname + location.search,
+      host: location.hostname,
+      sessionId: sessionId,
+      timestamp: timestamp,
+      properties: ga4Props
+    };
+
+    if (hasAnalyticsConsent() && window.zaraz && typeof window.zaraz.track === "function") {
+      window.zaraz.track(eventName, ga4Props);
+    }
+
+    if (hasAnalyticsConsent() && navigator.sendBeacon) {
+      navigator.sendBeacon(EP, JSON.stringify(payload));
+    }
+  }
+
+  function fireOnce(key, eventName, props) {
+    var k = "cmp_evt_" + key;
+    if (sessionStorage.getItem(k) === "1") return;
+    sessionStorage.setItem(k, "1");
+    emit(eventName, props);
+  }
+
+  function parseMoney(value) {
+    if (!value) return null;
+    var num = Number(String(value).replace(/[^0-9.]/g, ""));
+    return Number.isFinite(num) ? num : null;
+  }
+
+  function detectEcommerceViews() {
+    if (document.querySelector("[data-product-id], .product, .single-product")) {
+      fireOnce("view_item:" + location.pathname, "view_item", {
+        item_id: document.querySelector("[data-product-id]") && document.querySelector("[data-product-id]").getAttribute("data-product-id") || null,
+        item_name: document.title
+      });
+    }
+
+    if (document.querySelector(".products, .product-category, [data-item-list-name]")) {
+      fireOnce("view_item_list:" + location.pathname, "view_item_list", {
+        item_list_name: document.querySelector("[data-item-list-name]") && document.querySelector("[data-item-list-name]").getAttribute("data-item-list-name") || document.title
+      });
+    }
+
+    if (document.querySelector(".woocommerce-checkout, form.checkout")) {
+      fireOnce("begin_checkout:" + location.pathname, "begin_checkout", { currency: "USD" });
+    }
+  }
+
+  function bindDelegatedEvents() {
+    document.addEventListener("click", function(e) {
+      var el = e.target && e.target.closest ? e.target.closest("a,button,[data-event-name],[data-ga4-event]") : null;
       if (!el) return;
 
-      var href = el.href || el.dataset.href || "";
-      var text = (el.innerText || el.textContent || "").slice(0, 100).trim();
-      var id = el.id || el.dataset.eventId || "";
-
-      zaraz.track("click", {
-        link_id: id,
-        link_url: href,
-        link_text: text,
-        element_class: el.className,
-        page_path: location.pathname
-      });
-    }, { passive: true });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // 5. FORM TRACKING (Auto-detect all forms)
-    // ═══════════════════════════════════════════════════════════════════════
-
-    document.addEventListener("focusin", function (e) {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
-        var form = e.target.closest("form");
-        if (form) {
-          var formId = form.id || form.dataset.formId || "unknown";
-          var formName = form.dataset.formName || form.name || formId;
-          var formType = form.dataset.formType || "contact";
-
-          // Fire form_start only once per form
-          var trackKey = "cmpFormStarted_" + formId;
-          if (!window[trackKey]) {
-            window[trackKey] = true;
-            zaraz.track("form_start", {
-              form_id: formId,
-              form_name: formName,
-              form_type: formType
-            });
-          }
-        }
-      }
-    }, { passive: true });
-
-    // Form submission
-    document.addEventListener("submit", function (e) {
-      if (e.target.tagName === "FORM") {
-        var form = e.target;
-        var formId = form.id || form.dataset.formId || "unknown";
-        var formName = form.dataset.formName || form.name || formId;
-        var formType = form.dataset.formType || "contact";
-
-        zaraz.track("form_submit", {
-          form_id: formId,
-          form_name: formName,
-          form_type: formType,
-          form_destination: form.action || location.href
+      var evt = el.getAttribute("data-event-name") || el.getAttribute("data-ga4-event") || null;
+      if (evt) {
+        emit(evt, {
+          item_id: el.getAttribute("data-item-id") || null,
+          item_name: el.getAttribute("data-item-name") || null,
+          value: parseMoney(el.getAttribute("data-value")),
+          currency: el.getAttribute("data-currency") || null
         });
-
-        // Lead generation if form has value
-        if (form.dataset.leadValue) {
-          zaraz.track("lead_generation", {
-            value: parseFloat(form.dataset.leadValue) || 0,
-            currency: form.dataset.currency || "USD",
-            lead_type: formType,
-            form_id: formId
-          });
-        }
+        return;
       }
-    }, { passive: true });
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 6. E-COMMERCE TRACKING (WooCommerce)
-    // ═══════════════════════════════════════════════════════════════════════
+      var txt = ((el.innerText || "") + " " + (el.getAttribute("aria-label") || "")).toLowerCase();
+      var href = (el.getAttribute("href") || "").toLowerCase();
 
-    // View Item (product page)
-    if (document.body.classList.contains("single-product")) {
-      var pid = (document.querySelector("[data-product_id]") || {}).dataset || {};
-      var pname = (document.querySelector(".product_title") || {}).innerText || "";
-      var ppriceEl = document.querySelector(".price .woocommerce-Price-amount");
-      var pprice = parseFloat((ppriceEl || {}).innerText) || 0;
-      var pcategory = (document.querySelector(".posted_in a") || {}).innerText || "";
-
-      zaraz.track("view_item", {
-        items: [{
-          item_id: pid.product_id || "",
-          item_name: pname,
-          price: pprice,
-          currency: "USD",
-          item_category: pcategory
-        }],
-        value: pprice,
-        currency: "USD"
-      });
-    }
-
-    // View Item List (product category/shop)
-    if (document.body.classList.contains("archive") || document.body.classList.contains("shop")) {
-      var products = document.querySelectorAll(".product");
-      if (products.length > 0) {
-        zaraz.track("view_item_list", {
-          item_list_name: document.querySelector("h1")?.innerText || "Products",
-          page_path: location.pathname,
-          item_count: products.length
+      if (txt.indexOf("add to cart") !== -1 || txt.indexOf("agregar") !== -1) {
+        emit("add_to_cart", { item_name: document.title });
+      }
+      if (txt.indexOf("remove") !== -1 || txt.indexOf("eliminar") !== -1) {
+        emit("remove_from_cart", { item_name: document.title });
+      }
+      if (href.indexOf("shipping") !== -1) {
+        emit("add_shipping_info", { source: "navigation" });
+      }
+      if (href.indexOf("payment") !== -1) {
+        emit("add_payment_info", { source: "navigation" });
+      }
+      if (el.hasAttribute("data-promo-id")) {
+        emit("select_promotion", {
+          promotion_id: el.getAttribute("data-promo-id"),
+          promotion_name: el.getAttribute("data-promo-name") || null
         });
       }
-    }
-
-    // Add to Cart
-    document.addEventListener("wc_add_to_cart", function (e) {
-      var d = e.detail || {};
-      zaraz.track("add_to_cart", {
-        items: [{
-          item_id: String(d.product_id || ""),
-          item_name: d.product_name || "",
-          price: parseFloat(d.product_price) || 0,
-          quantity: parseInt(d.quantity) || 1,
-          currency: "USD"
-        }],
-        value: (parseFloat(d.product_price) * parseInt(d.quantity)) || 0,
-        currency: "USD"
-      });
-    });
-
-    // Remove from Cart
-    document.addEventListener("wc_remove_from_cart", function (e) {
-      var d = e.detail || {};
-      zaraz.track("remove_from_cart", {
-        items: [{
-          item_id: String(d.product_id || ""),
-          item_name: d.product_name || "",
-          price: parseFloat(d.product_price) || 0,
-          currency: "USD"
-        }],
-        value: parseFloat(d.product_price) || 0,
-        currency: "USD"
-      });
-    });
-
-    // View Cart
-    if (document.body.classList.contains("woocommerce-cart")) {
-      var cartItems = document.querySelectorAll("tr[data-product_id]");
-      zaraz.track("view_cart", {
-        item_count: cartItems.length,
-        page_path: location.pathname
-      });
-    }
-
-    // Begin Checkout
-    if (document.body.classList.contains("woocommerce-checkout")) {
-      zaraz.track("begin_checkout", {
-        page_path: location.pathname
-      });
-    }
-
-    // Purchase (Order Received page)
-    if (document.body.classList.contains("woocommerce-order-received")) {
-      var orderId = (document.querySelector("[data-order-id]") || {}).dataset || {};
-      var totalEl = document.querySelector(".woocommerce-order-overview__total .woocommerce-Price-amount");
-      var total = parseFloat((totalEl || {}).innerText?.replace(/[^0-9.]/g, "")) || 0;
-
-      zaraz.track("purchase", {
-        transaction_id: orderId.orderId || String(Date.now()),
-        value: total,
-        currency: "USD",
-        page_path: location.pathname
-      });
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // 7. E-LEARNING TRACKING (Moodle LMS)
-    // ═══════════════════════════════════════════════════════════════════════
-
-    // Detect Moodle context
-    var courseEl = document.querySelector("[data-courseid], .course-item");
-    var courseId = courseEl?.dataset?.courseid || "";
-    var courseName = (document.querySelector(".course-title, .coursename") || {}).innerText || "";
-
-    if (courseId) {
-      // Course page detected
-      zaraz.track("course_enrollment", {
-        course_id: courseId,
-        course_name: courseName,
-        page_path: location.pathname
-      });
-    }
-
-    // Lesson / Module tracking
-    var lessonEl = document.querySelector("[data-lessonid], .lesson-content");
-    if (lessonEl) {
-      var lessonId = lessonEl.dataset.lessonid || "";
-      var lessonName = (document.querySelector(".lesson-title") || {}).innerText || "";
-
-      zaraz.track("lesson_start", {
-        lesson_id: lessonId,
-        lesson_name: lessonName,
-        course_id: courseId,
-        page_path: location.pathname
-      });
-    }
-
-    // Quiz detection
-    if (document.body.classList.contains("quiz") || document.querySelector(".quiz-container")) {
-      var quizId = (document.querySelector("[data-quizid]") || {}).dataset?.quizid || "";
-      var quizName = (document.querySelector(".quiz-title, .quizname") || {}).innerText || "";
-
-      zaraz.track("quiz_start", {
-        quiz_id: quizId,
-        quiz_name: quizName,
-        course_id: courseId,
-        page_path: location.pathname
-      });
-
-      // Listen for quiz submission
-      document.addEventListener("quizSubmitted", function (e) {
-        var score = e.detail?.score || 0;
-        var passingScore = e.detail?.passingScore || 0;
-
-        zaraz.track("quiz_complete", {
-          quiz_id: quizId,
-          score: score,
-          passing_score: passingScore,
-          page_path: location.pathname
+      if (el.hasAttribute("data-item-id")) {
+        emit("select_item", {
+          item_id: el.getAttribute("data-item-id"),
+          item_name: el.getAttribute("data-item-name") || null
         });
+      }
+    }, true);
+  }
 
-        if (score < passingScore) {
-          zaraz.track("quiz_fail", {
-            quiz_id: quizId,
-            score: score,
-            passing_score: passingScore
-          });
-        }
-      }, { once: true });
-    }
+  function bindPurchaseSignals() {
+    var body = document.body || document.documentElement;
+    if (!body) return;
 
-    // Assignment detection
-    if (document.body.classList.contains("assignment") || document.querySelector(".assignment-container")) {
-      var assignmentId = (document.querySelector("[data-assignmentid]") || {}).dataset?.assignmentid || "";
-      var assignmentName = (document.querySelector(".assignment-title") || {}).innerText || "";
+    var orderId = body.getAttribute("data-order-id") || null;
+    var orderTotal = parseMoney(body.getAttribute("data-order-total"));
+    var currency = body.getAttribute("data-order-currency") || "USD";
 
-      document.addEventListener("assignmentSubmitted", function (e) {
-        zaraz.track("assignment_submit", {
-          assignment_id: assignmentId,
-          assignment_name: assignmentName,
-          course_id: courseId,
-          submission_type: e.detail?.type || "text"
-        });
-      }, { once: true });
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // 8. SEARCH TRACKING
-    // ═══════════════════════════════════════════════════════════════════════
-
-    // Detect search on results page
-    var searchParams = new URLSearchParams(location.search);
-    if (searchParams.has("s") || searchParams.has("q") || location.pathname.includes("/search")) {
-      var searchTerm = searchParams.get("s") || searchParams.get("q") || "";
-      var resultCount = document.querySelectorAll(".post, .product, .course-item, .search-result").length;
-
-      zaraz.track("search", {
-        search_term: searchTerm,
-        search_result_count: resultCount,
-        page_path: location.pathname
+    if (orderId || location.pathname.indexOf("order-received") !== -1) {
+      fireOnce("purchase:" + (orderId || location.pathname), "purchase", {
+        transaction_id: orderId || null,
+        value: orderTotal,
+        currency: currency
       });
     }
+  }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 9. VIDEO TRACKING
-    // ═══════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════
+  // INITIALIZATION
+  // ════════════════════════════════════════════════
 
-    // HTML5 video tracking
-    document.querySelectorAll("video").forEach(function (video, idx) {
-      var videoId = video.id || "video_" + idx;
-      var videoTitle = video.dataset.title || (document.querySelector("h1, .video-title") || {}).innerText || "Unnamed Video";
+  setGlobalUserProperties();
+  setDeviceProperties();
 
-      video.addEventListener("play", function () {
-        zaraz.track("video_start", {
-          video_id: videoId,
-          video_title: videoTitle,
-          video_duration: Math.round(video.duration)
-        });
-      }, { once: true });
+  fireOnce("session_start", "session_start", {
+    page_title: document.title,
+    page_location: location.href
+  });
+  emit("view_promotion", { placement: "page_load" });
+  detectEcommerceViews();
+  bindDelegatedEvents();
+  bindPurchaseSignals();
 
-      video.addEventListener("ended", function () {
-        zaraz.track("video_complete", {
-          video_id: videoId,
-          video_title: videoTitle,
-          video_duration: Math.round(video.duration)
-        });
-      }, { once: true });
-
-      // Progress tracking (25%, 50%, 75%)
-      var progressTracked = {};
-      video.addEventListener("timeupdate", function () {
-        var percent = Math.round((video.currentTime / video.duration) * 100);
-        [25, 50, 75].forEach(function (p) {
-          if (percent >= p && !progressTracked[p]) {
-            progressTracked[p] = true;
-            zaraz.track("video_progress", {
-              video_id: videoId,
-              progress_percent: p,
-              video_duration: Math.round(video.duration)
-            });
-          }
-        });
-      }, { passive: true });
-    });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // 10. ERROR TRACKING
-    // ═══════════════════════════════════════════════════════════════════════
-
-    window.addEventListener("error", function (e) {
-      zaraz.track("page_error", {
-        error_type: e.error?.name || "Error",
-        error_message: (e.error?.message || e.message || "").slice(0, 256),
-        error_source: e.filename || location.pathname,
-        error_line: e.lineno || 0
-      });
-    });
-
-    window.addEventListener("unhandledrejection", function (e) {
-      zaraz.track("page_error", {
-        error_type: "UnhandledRejection",
-        error_message: (e.reason?.message || String(e.reason) || "").slice(0, 256),
-        error_source: location.pathname
-      });
-    });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // 11. MOODLE EVENT LISTENERS (Custom Events)
-    // ═══════════════════════════════════════════════════════════════════════
-
-    // Listen for native Moodle events
-    document.addEventListener("cm_event_course_completed", function (e) {
-      zaraz.track("course_progress", {
-        course_id: e.detail?.courseid || courseId,
-        progress_percent: 100
-      });
-    });
-
-    document.addEventListener("cm_event_lesson_completed", function (e) {
-      zaraz.track("lesson_complete", {
-        lesson_id: e.detail?.lessonid || "",
-        lesson_name: e.detail?.lessonname || "",
-        course_id: courseId
-      });
-    });
-
-  }, 0); // end waitZaraz
+  document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === "hidden") {
+      emit("user_engagement", { engagement_time_msec: Math.round(performance.now()) });
+    }
+  });
 })();
 </script>`
 }

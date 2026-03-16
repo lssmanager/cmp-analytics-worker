@@ -1,56 +1,44 @@
-/**
- * searchTracker.js - Site Search Event Tracking
- * Detects site search submissions, result counts, and filters applied
- */
-
-export function buildSearchTrackerScript(endpoint = "/__cmp/analytics") {
-  return `<script>
+export function buildSearchTrackerScript(endpoint) {
+  return `
+<script>
 (function() {
-  var endpoint = "${endpoint}";
+  var EP = ${JSON.stringify(endpoint)};
 
-  // Detect search on results page
-  var searchParams = new URLSearchParams(location.search);
-  var searchTerm = searchParams.get("s") || searchParams.get("q") || searchParams.get("search") || "";
-  var resultCount = document.querySelectorAll(".post, .product, .course-item, .search-result, .wp-block-query").length;
-
-  if (searchTerm && resultCount > 0) {
-    navigator.sendBeacon(endpoint, JSON.stringify({
-      type: "search",
-      eventName: "Site Search",
-      page: location.pathname,
-      sessionId: getCookie("cmp_uid"),
-      properties: {
-        search_term: searchTerm,
-        search_result_count: resultCount,
-        page_path: location.pathname
-      }
-    }));
+  function hasAnalyticsConsent() {
+    var c = document.cookie.split("; ").find(function(v){ return v.indexOf("consent=") === 0; });
+    return !!(c && c.indexOf("analytics:true") !== -1);
   }
 
-  // Track search form submission
-  document.querySelectorAll('form[role="search"], .search-form, form.wp-block-search__button-outside').forEach(function(form) {
-    form.addEventListener("submit", function(e) {
-      var input = form.querySelector("input[name='s'], input[name='q'], input[name='search']");
-      if (input && input.value) {
-        navigator.sendBeacon(endpoint, JSON.stringify({
-          type: "search",
-          eventName: "Search Submitted",
-          page: location.pathname,
-          sessionId: getCookie("cmp_uid"),
-          properties: {
-            search_term: input.value,
-            search_source: "form_submission"
-          }
-        }));
-      }
-    });
-  });
-
-  function getCookie(name) {
-    var match = document.cookie.match(new RegExp("(^|;\\s*)(" + name + ")=([^;]*)"));
-    return match ? match[3] : "";
+  function emit(eventName, props) {
+    if (!hasAnalyticsConsent()) return;
+    var payload = {
+      type: eventName,
+      eventName: eventName,
+      page: location.pathname + location.search,
+      host: location.hostname,
+      properties: props || {}
+    };
+    if (window.zaraz && typeof window.zaraz.track === "function") window.zaraz.track(eventName, payload.properties);
+    if (navigator.sendBeacon) navigator.sendBeacon(EP, JSON.stringify(payload));
   }
 
+  function detectSearchFromQuery() {
+    var sp = new URLSearchParams(location.search);
+    var term = sp.get("s") || sp.get("search") || sp.get("q") || "";
+    if (!term) return;
+    emit("search", { search_term: term.slice(0, 120), source: "querystring" });
+    emit("view_search_results", { search_term: term.slice(0, 120), source: "querystring" });
+  }
+
+  document.addEventListener("submit", function(e) {
+    var form = e.target;
+    if (!form || form.tagName !== "FORM") return;
+    var input = form.querySelector("input[type='search'], input[name='s'], input[name='search'], input[name='q']");
+    if (!input || !input.value) return;
+    emit("search", { search_term: String(input.value).slice(0, 120), source: "form_submit" });
+  }, true);
+
+  detectSearchFromQuery();
 })();
 </script>`
 }

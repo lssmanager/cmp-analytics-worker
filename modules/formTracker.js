@@ -1,201 +1,103 @@
-/**
- * formTracker.js - Form Submission & Lead Generation Tracking
- * Auto-detects forms, tracks full lifecycle, sends to analytics
- */
-
-export function buildFormTrackerScript(endpoint = "/__cmp/analytics") {
-  return `<script>
+export function buildFormTrackerScript(endpoint) {
+  return `
+<script>
 (function() {
-  var endpoint = "${endpoint}";
-  var formStarted = {};
-  var formFieldCount = {};
+  var EP = ${JSON.stringify(endpoint)};
+  var started = new Map();
+  var submitted = new Set();
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // AUTO-DETECT & LABEL FORMS
-  // ═══════════════════════════════════════════════════════════════════════
-
-  function classifyFormType(form) {
-    var html = form.outerHTML.toLowerCase();
-    var fieldNames = Array.from(form.querySelectorAll("input, textarea")).map(f => f.name || f.id).join(" ").toLowerCase();
-
-    // Contact form
-    if (html.includes("contact") || fieldNames.includes("message") || fieldNames.includes("phone")) {
-      return "contact";
-    }
-
-    // Signup form
-    if (html.includes("signup") || html.includes("register") || fieldNames.includes("password")) {
-      return "signup";
-    }
-
-    // Newsletter
-    if (html.includes("newsletter") || html.includes("subscribe")) {
-      return "newsletter";
-    }
-
-    // Demo request
-    if (html.includes("demo") || html.includes("trial")) {
-      return "demo";
-    }
-
-    // Checkout (WooCommerce)
-    if (form.classList.contains("checkout") || html.includes("payment")) {
-      return "checkout";
-    }
-
-    // Search
-    if (form.method === "get" && (html.includes("search") || fieldNames.includes("s") || fieldNames.includes("q"))) {
-      return "search";
-    }
-
-    return "contact"; // default
+  function hasAnalyticsConsent() {
+    var c = document.cookie.split("; ").find(function(v){ return v.indexOf("consent=") === 0; });
+    return !!(c && c.indexOf("analytics:true") !== -1);
   }
 
-  function getFormId(form) {
-    return form.id || form.name || form.dataset.formId || "form_" + Date.now();
+  function formMeta(form) {
+    var id = form.getAttribute("id") || "anonymous_form";
+    var name = form.getAttribute("name") || id;
+    var fields = Array.prototype.slice.call(form.querySelectorAll("input,select,textarea"));
+    var fieldNames = fields.map(function(el) { return el.name || el.id || el.type || "field"; }).slice(0, 40);
+    var type = "generic";
+    var s = (id + " " + name + " " + fieldNames.join(" ")).toLowerCase();
+    if (s.indexOf("contact") >= 0) type = "contact";
+    else if (s.indexOf("newsletter") >= 0 || s.indexOf("subscribe") >= 0) type = "newsletter";
+    else if (s.indexOf("demo") >= 0) type = "demo";
+
+    return {
+      form_id: id,
+      form_name: name,
+      form_type: type,
+      form_field_count: fields.length,
+      form_field_names: fieldNames,
+      form_location: form.closest("[role='dialog'], .modal, .sidebar") ? "modal_or_sidebar" : "page"
+    };
   }
 
-  function getFormName(form) {
-    return form.dataset.formName || form.getAttribute("aria-label") || form.name || classifyFormType(form);
-  }
+  function emit(eventName, props) {
+    if (!hasAnalyticsConsent()) return;
+    var payload = {
+      type: eventName,
+      eventName: eventName,
+      page: location.pathname + location.search,
+      host: location.hostname,
+      properties: props || {}
+    };
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // FORM START DETECTION (First field focus)
-  // ═══════════════════════════════════════════════════════════════════════
+    if (window.zaraz && typeof window.zaraz.track === "function") {
+      window.zaraz.track(eventName, payload.properties);
+    }
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(EP, JSON.stringify(payload));
+    }
+  }
 
   document.addEventListener("focusin", function(e) {
-    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") {
-      var form = e.target.closest("form");
-      if (!form) return;
+    var form = e.target && e.target.form;
+    if (!form) return;
+    var meta = formMeta(form);
+    if (started.has(meta.form_id)) return;
+    started.set(meta.form_id, { meta: meta, at: Date.now(), lastField: e.target.name || e.target.id || null });
+    emit("form_start", meta);
+  }, true);
 
-      var formId = getFormId(form);
-
-      if (!formStarted[formId]) {
-        formStarted[formId] = {
-          startTime: Date.now(),
-          firstField: e.target.name || e.target.id,
-          fieldCount: form.querySelectorAll("input, textarea, select").length
-        };
-
-        var formType = classifyFormType(form);
-        var formName = getFormName(form);
-
-        // Send form_start event
-        navigator.sendBeacon(endpoint, JSON.stringify({
-          type: "form_start",
-          eventName: "Form Started",
-          page: location.pathname,
-          sessionId: getCookie("cmp_uid"),
-          properties: {
-            form_id: formId,
-            form_name: formName,
-            form_type: formType,
-            field_count: formStarted[formId].fieldCount,
-            first_field: formStarted[formId].firstField
-          }
-        }));
-      }
-    }
-  }, { passive: true });
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // FORM SUBMISSION
-  // ═══════════════════════════════════════════════════════════════════════
+  document.addEventListener("input", function(e) {
+    var form = e.target && e.target.form;
+    if (!form) return;
+    var id = form.getAttribute("id") || "anonymous_form";
+    var rec = started.get(id);
+    if (!rec) return;
+    rec.lastField = e.target.name || e.target.id || rec.lastField;
+  }, true);
 
   document.addEventListener("submit", function(e) {
-    if (e.target.tagName !== "FORM") return;
-
     var form = e.target;
-    var formId = getFormId(form);
-    var formType = classifyFormType(form);
-    var formName = getFormName(form);
-    var startData = formStarted[formId] || {};
+    if (!form || form.tagName !== "FORM") return;
+    var meta = formMeta(form);
+    submitted.add(meta.form_id);
 
-    var timeSpent = startData.startTime ? Math.round((Date.now() - startData.startTime) / 1000) : 0;
+    emit("form_submit", meta);
 
-    // Collect form field values (non-sensitive)
-    var formData = new FormData(form);
-    var values = {};
-    for (let [key, value] of formData.entries()) {
-      if (!["password", "cc", "cvv", "card", "creditcard"].some(s => key.toLowerCase().includes(s))) {
-        values[key] = String(value).slice(0, 50);
-      }
+    if (meta.form_type === "contact") emit("contact_form_submit", meta);
+    if (meta.form_type === "newsletter") emit("newsletter_signup", meta);
+    if (meta.form_type === "demo") emit("demo_request", meta);
+
+    var hasValue = !!form.querySelector("[name*='value'], [name*='amount'], [name*='budget']");
+    if (hasValue || meta.form_type !== "generic") {
+      emit("lead_generation", meta);
     }
-
-    // Send form_submit event
-    navigator.sendBeacon(endpoint, JSON.stringify({
-      type: "form_submit",
-      eventName: "Form Submitted",
-      page: location.pathname,
-      sessionId: getCookie("cmp_uid"),
-      properties: {
-        form_id: formId,
-        form_name: formName,
-        form_type: formType,
-        time_spent_seconds: timeSpent,
-        field_values: Object.keys(values).join(","),
-        field_count: form.querySelectorAll("input, textarea, select").length
-      }
-    }));
-
-    // Lead generation if form has monetary value
-    var leadValue = form.dataset.leadValue || parseFloat(form.querySelector("[data-lead-value]")?.dataset.leadValue) || 0;
-    if (leadValue > 0 || ["checkout", "demo", "contact"].includes(formType)) {
-      navigator.sendBeacon(endpoint, JSON.stringify({
-        type: "lead_generation",
-        eventName: "Lead Generated",
-        page: location.pathname,
-        sessionId: getCookie("cmp_uid"),
-        properties: {
-          value: leadValue,
-          currency: form.dataset.currency || "USD",
-          lead_type: formType,
-          form_id: formId,
-          form_name: formName
-        }
-      }));
-    }
-
-    // Delete form starter reference
-    delete formStarted[formId];
-  });
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // FORM ABANDON DETECTION
-  // ═══════════════════════════════════════════════════════════════════════
+  }, true);
 
   window.addEventListener("beforeunload", function() {
-    Object.keys(formStarted).forEach(function(formId) {
-      var form = document.querySelector("#" + formId + ", [name='" + formId + "']");
-      if (form && form.querySelectorAll("input:filled, textarea:not(:empty)").length > 0) {
-        // Form had input but wasn't submitted
-        var startData = formStarted[formId];
-        var lastFieldEl = document.activeElement;
-
-        navigator.sendBeacon(endpoint, JSON.stringify({
-          type: "form_abandon",
-          eventName: "Form Abandoned",
-          page: location.pathname,
-          sessionId: getCookie("cmp_uid"),
-          properties: {
-            form_id: formId,
-            last_field: lastFieldEl?. name || lastFieldEl?.id || "unknown",
-            time_spent_seconds: Math.round((Date.now() - startData.startTime) / 1000)
-          }
-        }));
-      }
+    started.forEach(function(rec, formId) {
+      if (submitted.has(formId)) return;
+      emit("form_abandon", {
+        form_id: formId,
+        form_name: rec.meta.form_name,
+        form_type: rec.meta.form_type,
+        dropoff_field: rec.lastField,
+        active_ms: Date.now() - rec.at
+      });
     });
   });
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // UTILITY FUNCTIONS
-  // ═══════════════════════════════════════════════════════════════════════
-
-  function getCookie(name) {
-    var match = document.cookie.match(new RegExp("(^|;\\s*)(" + name + ")=([^;]*)"));
-    return match ? match[3] : "";
-  }
-
 })();
 </script>`
 }

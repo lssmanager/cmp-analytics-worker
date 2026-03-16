@@ -2,6 +2,7 @@ export async function blockScripts(response, consent) {
   return new HTMLRewriter()
     .on("script", {
       element(el) {
+        if (el.getAttribute("data-cmp-tracker") === "1") return
         const category = el.getAttribute("data-consent")
         if (!category) return
         if (!consent || !consent[category]) {

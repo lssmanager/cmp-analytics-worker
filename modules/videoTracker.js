@@ -1,213 +1,61 @@
-/**
- * videoTracker.js - Video Engagement Tracking
- * Tracks video start, progress, and completion for all video types
- * Supports HTML5 video, YouTube iframes, Vimeo embeds
- */
-
-export function buildVideoTrackerScript(endpoint = "/__cmp/analytics") {
-  return `<script>
+export function buildVideoTrackerScript(endpoint) {
+  return `
+<script>
 (function() {
-  var endpoint = "${endpoint}";
+  var EP = ${JSON.stringify(endpoint)};
+  var progressMap = new WeakMap();
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // HTML5 VIDEO TRACKING
-  // ═══════════════════════════════════════════════════════════════════════
+  function hasAnalyticsConsent() {
+    var c = document.cookie.split("; ").find(function(v){ return v.indexOf("consent=") === 0; });
+    return !!(c && c.indexOf("analytics:true") !== -1);
+  }
 
-  document.querySelectorAll("video").forEach(function(video, idx) {
-    var videoId = video.id || video.dataset.videoId || "html5_video_" + idx;
-    var videoTitle = video.dataset.title || video.title || document.querySelector("h1, .video-title")?.innerText || "Video";
-    var videoDuration = 0;
-    var progressTracked = {};
-    var videoStarted = false;
+  function emit(eventName, props) {
+    if (!hasAnalyticsConsent()) return;
+    var payload = {
+      type: eventName,
+      eventName: eventName,
+      page: location.pathname + location.search,
+      host: location.hostname,
+      properties: props || {}
+    };
+    if (window.zaraz && typeof window.zaraz.track === "function") window.zaraz.track(eventName, payload.properties);
+    if (navigator.sendBeacon) navigator.sendBeacon(EP, JSON.stringify(payload));
+  }
 
-    video.addEventListener("loadedmetadata", function() {
-      videoDuration = Math.round(video.duration);
-    });
+  function meta(video) {
+    return {
+      video_title: video.getAttribute("title") || video.getAttribute("aria-label") || document.title,
+      video_src: video.currentSrc || video.getAttribute("src") || null,
+      video_duration: Number.isFinite(video.duration) ? Math.round(video.duration) : null
+    };
+  }
 
-    // Video start
-    video.addEventListener("play", function() {
-      if (!videoStarted) {
-        videoStarted = true;
-        navigator.sendBeacon(endpoint, JSON.stringify({
-          type: "video_start",
-          eventName: "Video Started",
-          page: location.pathname,
-          sessionId: getCookie("cmp_uid"),
-          properties: {
-            video_id: videoId,
-            video_title: videoTitle,
-            video_duration: videoDuration,
-            video_provider: "html5"
-          }
-        }));
-      }
-    }, { once: true });
+  function bindVideo(video) {
+    if (progressMap.has(video)) return;
+    progressMap.set(video, { p25: false, p50: false, p75: false });
 
-    // Video progress (25%, 50%, 75%)
+    video.addEventListener("play", function() { emit("video_start", meta(video)); });
+
     video.addEventListener("timeupdate", function() {
-      if (videoDuration > 0) {
-        var percent = Math.round((video.currentTime / videoDuration) * 100);
-        [25, 50, 75].forEach(function(p) {
-          if (percent >= p && !progressTracked[p]) {
-            progressTracked[p] = true;
-            navigator.sendBeacon(endpoint, JSON.stringify({
-              type: "video_progress",
-              eventName: "Video Progress",
-              page: location.pathname,
-              sessionId: getCookie("cmp_uid"),
-              properties: {
-                video_id: videoId,
-                progress_percent: p,
-                watched_time: Math.round(video.currentTime),
-                video_duration: videoDuration
-              }
-            }));
-          }
-        });
-      }
-    }, { passive: true });
-
-    // Video complete
-    video.addEventListener("ended", function() {
-      navigator.sendBeacon(endpoint, JSON.stringify({
-        type: "video_complete",
-        eventName: "Video Completed",
-        page: location.pathname,
-        sessionId: getCookie("cmp_uid"),
-        properties: {
-          video_id: videoId,
-          video_title: videoTitle,
-          video_duration: videoDuration,
-          watched_time: videoDuration
-        }
-      }));
-    }, { once: true });
-  });
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // YOUTUBE IFRAME TRACKING (IFrame API)
-  // ═══════════════════════════════════════════════════════════════════════
-
-  window.addEventListener("load", function() {
-    document.querySelectorAll("iframe[src*='youtube']").forEach(function(iframe, idx) {
-      var videoId = extractYouTubeId(iframe.src) || "youtube_" + idx;
-      var videoTitle = iframe.dataset.title || "YouTube Video";
-      var progressTracked = {};
-
-      // YouTube IFrame API setup
-      if (window.YT && window.YT.Player) {
-        var player = new YT.Player(iframe, {
-          events: {
-            onReady: function(e) {
-              var duration = e.target.getDuration();
-              iframe.dataset.duration = duration;
-            },
-            onStateChange: function(e) {
-              var states = { 0: "ended", 1: "playing", 2: "paused", 3: "buffering", 5: "video_cued" };
-              if (e.data === 1) { // PLAYING
-                if (!iframe.dataset.started) {
-                  iframe.dataset.started = "1";
-                  navigator.sendBeacon(endpoint, JSON.stringify({
-                    type: "video_start",
-                    eventName: "YouTube Video Started",
-                    page: location.pathname,
-                    sessionId: getCookie("cmp_uid"),
-                    properties: {
-                      video_id: videoId,
-                      video_title: videoTitle,
-                      video_duration: parseInt(iframe.dataset.duration || 0),
-                      video_provider: "youtube"
-                    }
-                  }));
-                }
-              }
-              if (e.data === 0) { // ENDED
-                navigator.sendBeacon(endpoint, JSON.stringify({
-                  type: "video_complete",
-                  eventName: "YouTube Video Completed",
-                  page: location.pathname,
-                  sessionId: getCookie("cmp_uid"),
-                  properties: {
-                    video_id: videoId,
-                    video_provider: "youtube"
-                  }
-                }));
-              }
-            }
-          }
-        });
-      }
+      if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+      var pct = (video.currentTime / video.duration) * 100;
+      var m = progressMap.get(video);
+      if (!m.p25 && pct >= 25) { m.p25 = true; emit("video_progress", { percent: 25, video_src: meta(video).video_src }); }
+      if (!m.p50 && pct >= 50) { m.p50 = true; emit("video_progress", { percent: 50, video_src: meta(video).video_src }); }
+      if (!m.p75 && pct >= 75) { m.p75 = true; emit("video_progress", { percent: 75, video_src: meta(video).video_src }); }
     });
-  });
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // VIMEO IFRAME TRACKING
-  // ═══════════════════════════════════════════════════════════════════════
-
-  window.addEventListener("load", function() {
-    document.querySelectorAll("iframe[src*='vimeo']").forEach(function(iframe, idx) {
-      var videoId = extractVimeoId(iframe.src) || "vimeo_" + idx;
-      var videoTitle = iframe.dataset.title || "Vimeo Video";
-
-      // Load Vimeo Player API if available
-      if (window.Vimeo && window.Vimeo.Player) {
-        var player = new Vimeo.Player(iframe);
-
-        player.on("play", function() {
-          if (!iframe.dataset.started) {
-            iframe.dataset.started = "1";
-            player.getDuration().then(function(duration) {
-              navigator.sendBeacon(endpoint, JSON.stringify({
-                type: "video_start",
-                eventName: "Vimeo Video Started",
-                page: location.pathname,
-                sessionId: getCookie("cmp_uid"),
-                properties: {
-                  video_id: videoId,
-                  video_title: videoTitle,
-                  video_duration: Math.round(duration),
-                  video_provider: "vimeo"
-                }
-              }));
-            });
-          }
-        });
-
-        player.on("ended", function() {
-          navigator.sendBeacon(endpoint, JSON.stringify({
-            type: "video_complete",
-            eventName: "Vimeo Video Completed",
-            page: location.pathname,
-            sessionId: getCookie("cmp_uid"),
-            properties: {
-              video_id: videoId,
-              video_provider: "vimeo"
-            }
-          }));
-        });
-      }
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // HELPER FUNCTIONS
-  // ═══════════════════════════════════════════════════════════════════════
-
-  function extractYouTubeId(url) {
-    var match = url.match(/(?:youtube.com\\/watch\\?v=|youtu.be\\/)([\\w-]{11})/);
-    return match ? match[1] : null;
+    video.addEventListener("ended", function() { emit("video_complete", meta(video)); });
   }
 
-  function extractVimeoId(url) {
-    var match = url.match(/vimeo.com\\/(\\d+)/);
-    return match ? match[1] : null;
+  function scan() {
+    document.querySelectorAll("video").forEach(bindVideo);
   }
 
-  function getCookie(name) {
-    var match = document.cookie.match(new RegExp("(^|;\\s*)(" + name + ")=([^;]*)"));
-    return match ? match[3] : "";
-  }
-
+  scan();
+  var obs = new MutationObserver(scan);
+  obs.observe(document.documentElement || document.body, { childList: true, subtree: true });
 })();
 </script>`
 }

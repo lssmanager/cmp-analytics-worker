@@ -38,13 +38,14 @@ export function buildUserIdentity(request, geo, platforms, region) {
     isAuthenticated : Boolean(wpUser),
     isMoodleActive  : moodleSession,
     fingerprint,
-    platform        : platforms.isMoodle ? "moodle" : "wordpress",
+    platform        : platforms.isMoodle ? "moodle" : (platforms.isBuddyBoss ? "buddyboss" : "wordpress"),
     host            : url.hostname,
     path            : url.pathname,
     referrer        : request.headers.get("referer"),
     ip,
     moodleContext   : detectMoodlePageType(url),
-    wooContext      : detectWooPageType(request)
+    wooContext      : detectWooPageType(request),
+    buddybossContext: detectBuddyBossPageType(url)
   }
 }
 
@@ -77,4 +78,19 @@ function detectWooPageType(request) {
                          cookies["woocommerce_items_in_cart"] !== "0"),
     cartHash   : cookies["woocommerce_cart_hash"] || null
   }
+}
+
+function detectBuddyBossPageType(url) {
+  const p = url.pathname.toLowerCase()
+  const clean = p.endsWith("/") ? p.slice(0, -1) : p
+  const parts = clean.split("/").filter(Boolean)
+
+  if (p.includes("/members/")) return { type: "member_profile", slug: parts[parts.indexOf("members") + 1] || null }
+  if (p.includes("/groups/")) return { type: "group", slug: parts[parts.indexOf("groups") + 1] || null }
+  if (p.includes("/forums/")) return { type: "forum", slug: parts[parts.indexOf("forums") + 1] || null }
+  if (p.includes("/activity/")) return { type: "activity_stream", slug: null }
+  if (p.includes("/points") || p.includes("/achievements") || p.includes("/ranks") || p.includes("/badges")) {
+    return { type: "gamification", slug: null }
+  }
+  return null
 }

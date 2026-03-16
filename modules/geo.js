@@ -1,4 +1,4 @@
-import { EU_COUNTRIES } from "../config/regions.js"
+import { EU_COUNTRIES } from "./regions.js"
 
 export function detectRegion(cf = {}) {
   const countries = Array.isArray(EU_COUNTRIES) ? EU_COUNTRIES : []
